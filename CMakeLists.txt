@@ -1,0 +1,37 @@
+cmake_minimum_required(VERSION 3.20)
+
+project(fuzzyta)
+
+set(CMAKE_BUILD_TYPE RelWithDebInfo)
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED True)
+
+find_library(OpenGL GL REQUIRED)
+find_library(SDL2 SDL2 REQUIRED)
+find_library(GLEW GLEW REQUIRED)
+
+include_directories(include)
+include_directories(thirdparty)
+
+file(GLOB core_sources CONFIGURE_DEPENDS source/*.cpp)
+add_library(core STATIC ${core_sources})
+
+add_subdirectory(thirdparty/imgui)
+add_subdirectory(thirdparty/nanovg)
+add_subdirectory(thirdparty/rash)
+
+add_executable(main main.cpp)
+add_executable(locate locate.cpp)
+
+set(cxx_options
+    -Wall
+    -Wextra
+    -Wno-char-subscripts
+    -Wno-sign-compare
+)
+
+target_compile_options(core PRIVATE ${cxx_options})
+target_compile_options(main PRIVATE ${cxx_options})
+
+target_link_libraries(main core)
+target_link_libraries(locate core rash imgui nanovg OpenGL GLEW SDL2)

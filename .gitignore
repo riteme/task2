@@ -1,0 +1,5 @@
+data/
+build/
+.cache/
+compile_commands.json
+*.ipynb
