@@ -9,6 +9,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED True)
 find_library(OpenGL GL REQUIRED)
 find_library(SDL2 SDL2 REQUIRED)
 find_library(GLEW GLEW REQUIRED)
+find_library(pthread pthread REQUIRED)
 
 include_directories(include)
 include_directories(thirdparty)
@@ -34,4 +35,4 @@ target_compile_options(core PRIVATE ${cxx_options})
 target_compile_options(main PRIVATE ${cxx_options})
 
 target_link_libraries(main core)
-target_link_libraries(locate core rash imgui nanovg OpenGL GLEW SDL2)
+target_link_libraries(locate core rash imgui nanovg OpenGL GLEW SDL2 pthread)

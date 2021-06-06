@@ -102,16 +102,14 @@ auto Index::align(const BioSeq &s) -> Alignment {
         auto [x, y] = u.key;
         auto [t, l] = u.value;
 
-        if (y + 1 <= n)
-            probe({{x, y + 1}, {t + 11, l}});
+        probe({{x, y + 1}, {t + 11, l}});
 
         for (int c = 0; c < SIGMA; c++) {
             int z = m[x].transition[c];
             if (!z)
                 continue;
 
-            if (y + 1 <= n && c == CMAP[s[y + 1]])
-                probe({{z, y + 1}, {t + 1, l + 1}});
+            probe({{z, y + 1}, {t + (c == CMAP[s[y + 1]] ? 1 : 6), l + 1}});
             probe({{z, y}, {t + 11, l + 1}});
         }
     } while (!q.empty());
@@ -120,7 +118,6 @@ auto Index::align(const BioSeq &s) -> Alignment {
     int loss = (2 * opt.value.t - opt.key.y - opt.value.l) / 21;
     printf("opt: x=%d, y=%d, t=%d, l=%d, loss=%d\n",
         opt.key.x, opt.key.y, opt.value.t, opt.value.l, loss);
-    printf("rate=%.3lf%%\n", loss * 100.0 / n);
     printf("q.max_size=%zu, q.size()=%zu, f.size()=%zu\n",
         max_size, q.size(), f.size());
 

@@ -151,3 +151,9 @@ void Application::nvg_text_mode(NVGcolor color, float size, int align) {
     nvgFontFaceId(_vg, _default_font);
     nvgTextAlign(_vg, align);
 }
+
+auto Application::get_mouse_position() -> Vec2i {
+    int x, y;
+    SDL_GetMouseState(&x, &y);
+    return {x, y};
+}

@@ -27,15 +27,20 @@ constexpr FontInfo FONT_FILES[] = {
     {"../asset/SourceHanSansCN-Regular.otf", true, 37.0f},
 };
 
-
 void abort_with_message(const char *message, ...);
 void abort_with_errno();
 void abort_with_sdl_error();
 
-
 auto zenity_file_selection(const std::string &title) -> std::string;
 void zenity_file_selection_fgets(const std::string &title, char *buffer, int n);
 
+struct Vec2i {
+    int x, y;
+
+    bool operator<(const Vec2i &rhs) const {
+        return std::tie(x, y) < std::tie(rhs.x, rhs.y);
+    }
+};
 
 class Application {
 public:
@@ -54,6 +59,7 @@ public:
     void gl_clear(float r, float g, float b);
     auto get_nanovg_context() -> NVGcontext *;
     void nvg_text_mode(NVGcolor color, float size, int align);
+    auto get_mouse_position() -> Vec2i;
 
 private:
     bool _stopped = false;
