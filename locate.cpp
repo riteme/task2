@@ -3,6 +3,7 @@
 #include <atomic>
 #include <vector>
 #include <thread>
+#include <fstream>
 
 #include "core.hpp"
 #include "thirdparty/rash/rash.hpp"
@@ -17,9 +18,11 @@ int main() {
     bool show_demo = false;
     char ref_path[1024] = "";
     char runs_path[1024] = "";
+    char bed_path[1024] = "";
     core::Dict ref, runs;
     int run_id = 0;
     std::mutex lock;
+    std::vector<std::vector<int>> sv;
     std::vector<std::map<Vec2i, int>> locations;
     std::vector<int> positions;
     std::vector<core::Index *> indexes;
@@ -41,11 +44,39 @@ int main() {
         puts(runs_path);
         runs.load_file(runs_path);
 
-        reset_markers();
+        sv.clear();
+        sv.resize(ref.size());
+        std::fstream fp(bed_path);
 
-        for (auto i : indexes) {
-            delete i;
+        auto read_one = [&] {
+            std::string name, left_literal, right_literal;
+            fp >> name >> left_literal >> right_literal;
+            printf("%s %s %s\n", name.data(), left_literal.data(), right_literal.data());
+
+            int left = std::stoi(left_literal);
+            int right = std::stoi(right_literal);
+            for (int i = 0; i < ref.size(); i++) {
+                if (ref[i].name == name) {
+                    int middle = (left + right) / 2;
+                    float hv = float(middle) / ref[i].sequence.size();
+                    sv[i].push_back(hv * WINDOW_WIDTH);
+                    break;
+                }
+            }
+        };
+
+        while (fp) {
+            std::string op;
+            fp >> op;
+            if (op.empty())
+                break;
+
+            read_one();
+            if (op == "TRA")
+                read_one();
         }
+
+        reset_markers();
 
         for (auto i : indexes) {
             delete i;
@@ -130,6 +161,13 @@ int main() {
             nvgFillColor(vg, nvgRGB(33, 150, 243));
             nvgFill(vg);
 
+            for (int x : sv[i]) {
+                nvgBeginPath(vg);
+                nvgRect(vg, x - 5.0f, top + 33.0f, 10.0f, 16.0f);
+                nvgFillColor(vg, nvgRGBA(255, 0, 0, 100));
+                nvgFill(vg);
+            }
+
             lock.lock();
             for (auto &e : locations[i]) {
                 auto [x, y] = e.first;
@@ -168,6 +206,11 @@ int main() {
         ImGui::SameLine();
         ImGui::InputText("runs", runs_path, 1024);
 
+        if (ImGui::Button("Open...##3"))
+            zenity_file_selection_fgets("Select sv.bed", bed_path, 1024);
+        ImGui::SameLine();
+        ImGui::InputText("sv.bed", bed_path, 1024);
+
         if (ImGui::Button("Load"))
             load_files();
 
@@ -182,7 +225,6 @@ int main() {
                 run_id = run_id_max;
             ImGui::SameLine();
             ImGui::Text("[0-%d]", run_id_max);
-
 
             float float0 = 0.0f, float255 = 255.0f;
             ImGui::DragScalar("marker alpha", ImGuiDataType_Float, &marker_alpha, 0.02f, &float0, &float255);
