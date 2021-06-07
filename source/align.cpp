@@ -10,6 +10,8 @@
 
 namespace {
 
+using namespace core;
+
 struct Key {
     int x = 1, y = 0;
 
@@ -30,28 +32,23 @@ struct Value {
     }
 };
 
-static int current_len;
-
 struct Pair {
     Key key;
     Value value;
+};
 
-    auto estimated() const -> Value {
-        // TODO: why (t + 2*r)-heuristic is not effective?
+struct PairComparer {
+    int n;
 
-        int remain = current_len - key.y;
-
+    auto estimate(const Pair &p) const -> Key {
         return {
-            value.t + 3 * remain,
-            value.l
+            p.value.t + 3 * (n - p.key.y),
+            p.value.l
         };
-
-        // return value;
     }
 
-    bool operator<(const Pair &rhs) const {
-        return rhs.estimated() < estimated();
-        // return rhs.value < value;
+    bool operator()(const Pair &lhs, const Pair &rhs) const {
+        return estimate(rhs) < estimate(lhs);
     }
 };
 
@@ -72,10 +69,9 @@ namespace core {
 
 auto Index::align(const BioSeq &s) -> Alignment {
     int n = s.size();
-    current_len = n;
-
-    size_t max_queue_size = 0;
-    std::priority_queue<Pair> q;
+    std::priority_queue<
+        Pair, std::vector<Pair>, PairComparer
+    > q(PairComparer{n});
     q.push(Pair());
 
     // std::unordered_map<Key, Value> f;
@@ -98,6 +94,8 @@ auto Index::align(const BioSeq &s) -> Alignment {
     };
 
     Pair opt;
+    size_t max_queue_size = 0;
+
     do {
         max_queue_size = std::max(max_queue_size, q.size());
         auto u = q.top();
