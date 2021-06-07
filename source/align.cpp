@@ -12,6 +12,10 @@ namespace {
 
 using namespace core;
 
+constexpr int MISMATCH_COST = 10;
+constexpr int MATCH_COST = 1;
+constexpr int H_VALUE = 5;
+
 struct Key {
     int x = 1, y = 0;
 
@@ -28,7 +32,7 @@ struct Value {
     int t = 0, l = 0;
 
     bool operator<(const Value &rhs) const {
-        return std::make_tuple(t, -l) < std::make_tuple(rhs.t, -rhs.l);
+        return t < rhs.t;
     }
 };
 
@@ -42,7 +46,7 @@ struct PairComparer {
 
     auto estimate(const Pair &p) const -> Key {
         return {
-            p.value.t + 3 * (n - p.key.y),
+            p.value.t + H_VALUE * (n - p.key.y),
             p.value.l
         };
     }
@@ -112,15 +116,16 @@ auto Index::align(const BioSeq &s) -> Alignment {
         auto [x, y] = u.key;
         auto [t, l] = u.value;
 
-        probe({{x, y + 1}, {t + 11, l}});
+        probe({{x, y + 1}, {t + MISMATCH_COST + MATCH_COST, l}});
 
         for (int c = 0; c < SIGMA; c++) {
             int z = m[x].transition[c];
             if (!z)
                 continue;
 
-            probe({{z, y + 1}, {t + (c == CMAP[s[y + 1]] ? 1 : 11), l + 1}});
-            probe({{z, y}, {t + 11, l + 1}});
+            int v = (c == CMAP[s[y + 1]] ? 0 : MISMATCH_COST) + MATCH_COST;
+            probe({{z, y + 1}, {t + v, l + 1}});
+            probe({{z, y}, {t + MISMATCH_COST + MATCH_COST, l + 1}});
         }
     } while (!q.empty());
 
