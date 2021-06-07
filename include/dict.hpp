@@ -13,6 +13,9 @@ struct DictEntry {
     DictEntry(const std::string &_name, const std::string &_sqeuence)
         : name(_name), sequence(_sqeuence) {}
 
+    DictEntry &operator=(const DictEntry &) = default;
+    DictEntry &operator=(DictEntry &&) = default;
+
     std::string name;
     std::string sequence;
 };
@@ -21,6 +24,7 @@ struct DictEntry {
 class Dict {
 public:
     void load_file(const std::string &path);
+    void sort_by_name();
 
     auto &operator[](size_t i) {
         return _entries[i];

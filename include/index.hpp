@@ -7,7 +7,7 @@
 
 namespace core {
 
-constexpr int SIGMA = 5;
+constexpr int ALPHABET_SIZE = 5;
 constexpr int CMAP[256] = {
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -32,10 +32,15 @@ struct Token {
     int len = 0;
 };
 
+struct Location {
+    bool reversed;
+    int left;
+    int right;
+};
+
 struct AlignmentDebugInfo {
     int n_state_visited;
     int max_queue_size;
-    int pure_loss;
 };
 
 struct Alignment {
@@ -48,6 +53,10 @@ class Index {
 public:
     Index();
 
+    auto size() -> int {
+        return _n_appended;
+    }
+
     void append(int c);
     void append(const BioSeq &s);
     void build();
@@ -56,12 +65,13 @@ public:
     auto next(const Token &t, int c) -> Token;
     auto locate(const BioSeq &s) -> Token;
     auto align(const BioSeq &s) -> Alignment;
+    auto fuzzy_locate(const BioSeq &s) -> Location;
 
 private:
     struct Node {
         int maxlen = 0, fail = 0;
         int index = 0;
-        int transition[SIGMA] = {0};
+        int transition[ALPHABET_SIZE] = {0};
 
         struct {
             int in = 0, out = 0;
@@ -70,8 +80,9 @@ private:
     };
 
     int _last = 1;
+    int _n_appended = 0;
     std::vector<Node> m;
-    std::vector<int> sorted;
+    std::vector<int> _sorted;
 
     auto _allocate(int n) -> int;
     void _copy(int dst, int src);

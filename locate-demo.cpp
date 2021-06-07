@@ -11,6 +11,7 @@
 
 
 constexpr int K = 20;
+constexpr int S = 3;
 constexpr auto NVG_FONT_SIZE = 25.0f;
 
 int main() {
@@ -20,6 +21,11 @@ int main() {
         int position;
         int total_state_visited;
         float time_used;
+    };
+
+    struct Rect {
+        float x, y, w, h;
+        float r, g, b, a;
     };
 
     bool show_demo = false;
@@ -33,21 +39,26 @@ int main() {
     std::vector<std::map<Vec2i, int>> locations;
     std::vector<WorkerInfo> info;
     std::vector<core::Index *> indexes;
+    std::vector<std::vector<Rect>> rects;
     float marker_alpha = 1.0f;
 
     auto reset_markers = [&] {
         lock.lock();
         locations.clear();
         locations.resize(ref.size());
+        rects.clear();
+        rects.resize(ref.size());
         lock.unlock();
 
         info.clear();
-        info.resize(ref.size() * 2);
+        info.resize(ref.size() * 3);
     };
 
     auto load_files = [&] {
         puts(ref_path);
         ref.load_file(ref_path);
+        ref.sort_by_name();
+
         puts(runs_path);
         runs.load_file(runs_path);
 
@@ -125,7 +136,7 @@ int main() {
             }
         }
 
-        for (int i = 0; i + K <= run.sequence.size(); i++) {
+        for (int i = 0; i + K <= run.sequence.size(); i += S) {
             if (locate_disabled)
                 break;
 
@@ -149,6 +160,46 @@ int main() {
 
             info[id].position = i + 1;
         }
+
+        auto t_end = clock::now();
+        auto span = std::chrono::duration_cast<std::chrono::duration<float>>(t_end - t_begin).count();
+        info[id].time_used = span;
+    };
+
+    auto fuzzy = [&](int id, int ref_id, int y) {
+        using clock = std::chrono::high_resolution_clock;
+        auto t_begin = clock::now();
+
+        auto location = indexes[ref_id]->fuzzy_locate(runs[run_id].sequence);
+        printf(
+            "%s @%s: [%d, %d], rev=%d\n",
+            runs[run_id].name.data(), ref[ref_id].name.data(),
+            location.left, location.right, location.reversed
+        );
+
+        int n = ref[ref_id].sequence.size();
+        float l = float(location.left) / n * WINDOW_WIDTH;
+        float r = float(location.right) / n * WINDOW_WIDTH;
+
+        lock.lock();
+
+        rects[ref_id].push_back({
+            l - 10.0f, float(y), r - l + 20.0f, 10.0f,
+            0, 0, 0, 50
+        });
+
+        if (location.reversed)
+            rects[ref_id].push_back({
+                l, float(y), r - l, 10.0f,
+                255, 0, 0, 255
+            });
+        else
+            rects[ref_id].push_back({
+                l, float(y), r - l, 10.0f,
+                0, 0, 0, 255
+            });
+
+        lock.unlock();
 
         auto t_end = clock::now();
         auto span = std::chrono::duration_cast<std::chrono::duration<float>>(t_end - t_begin).count();
@@ -185,6 +236,7 @@ int main() {
             }
 
             lock.lock();
+
             for (auto &e : locations[i]) {
                 auto [x, y] = e.first;
                 int count = e.second;
@@ -194,6 +246,14 @@ int main() {
                 nvgFillColor(vg, nvgRGBA(0, 0, 0, std::min(255, int(marker_alpha * count))));
                 nvgFill(vg);
             }
+
+            for (auto &e : rects[i]) {
+                nvgBeginPath(vg);
+                nvgRect(vg, e.x, top + 55.0f + e.y, e.w, e.h);
+                nvgFillColor(vg, nvgRGBA(e.r, e.g, e.b, e.a));
+                nvgFill(vg);
+            }
+
             lock.unlock();
         }
 
@@ -215,8 +275,10 @@ int main() {
         if (ImGui::Button("Clear##1"))
             ref_path[0] = 0;
         ImGui::SameLine();
-        if (ImGui::Button("Open...##1"))
+        if (ImGui::Button("Open...##1")) {
             zenity_file_selection_fgets("Select reference file", ref_path, 1024);
+            bed_path[0] = 0;
+        }
         ImGui::SameLine();
         ImGui::InputText("ref", ref_path, 1024);
 
@@ -257,10 +319,12 @@ int main() {
                 reset_markers();
 
                 for (int i = 0; i < ref.size(); i++) {
-                    std::thread t1(locate, 2 * i + 0, i, 0, false);
-                    std::thread t2(locate, 2 * i + 1, i, 20, true);
+                    std::thread t1(locate, 3 * i + 0, i, 0, false);
+                    std::thread t2(locate, 3 * i + 1, i, 20, true);
+                    std::thread t3(fuzzy, 3 * i + 2, i, 40);
                     t1.detach();
                     t2.detach();
+                    t3.detach();
                 }
             }
             ImGui::SameLine();

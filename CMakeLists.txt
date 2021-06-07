@@ -23,6 +23,7 @@ add_subdirectory(thirdparty/nanovg)
 add_subdirectory(thirdparty/rash)
 
 add_executable(align align.cpp)
+add_executable(locate locate.cpp)
 add_executable(locate-demo locate-demo.cpp)
 
 set(cxx_options
@@ -34,7 +35,9 @@ set(cxx_options
 
 target_compile_options(core PRIVATE ${cxx_options})
 target_compile_options(align PRIVATE ${cxx_options})
+target_compile_options(locate PRIVATE ${cxx_options})
 target_compile_options(locate-demo PRIVATE ${cxx_options})
 
 target_link_libraries(align core)
+target_link_libraries(locate core pthread)
 target_link_libraries(locate-demo core rash imgui nanovg OpenGL GLEW SDL2 pthread)

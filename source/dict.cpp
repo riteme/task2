@@ -2,6 +2,7 @@
 #include <cassert>
 
 #include <fstream>
+#include <algorithm>
 
 #include "dict.hpp"
 
@@ -60,6 +61,15 @@ void Dict::load_file(const std::string &path) {
         trim(sequence);
         _entries.emplace_back(name, sequence);
     }
+}
+
+void Dict::sort_by_name() {
+    std::sort(
+        _entries.begin(), _entries.end(),
+        [](const DictEntry &u, const DictEntry &v) {
+            return u.name < v.name;
+        }
+    );
 }
 
 }

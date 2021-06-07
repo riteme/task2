@@ -31,6 +31,8 @@ void Index::_copy(int dst, int src) {
 }
 
 auto Index::_append(int x, int c) -> int {
+    _n_appended++;
+
     int y = _allocate(1);
     m[y].index = m[y].maxlen = m[x].maxlen + 1;
 
@@ -76,8 +78,8 @@ void Index::build() {
         m[p].children.push_back(i);
     }
 
-    sorted.clear();
-    sorted.resize(m.size());
+    _sorted.clear();
+    _sorted.resize(m.size());
     int count = 0;
     _traverse(1, count);
 }
@@ -85,7 +87,7 @@ void Index::build() {
 void Index::_traverse(int x, int &count) {
     count++;
     m[x].dfn.in = count;
-    sorted[count] = m[x].index;
+    _sorted[count] = m[x].index;
 
     for (int v : m[x].children) {
         _traverse(v, count);
@@ -97,7 +99,7 @@ void Index::_traverse(int x, int &count) {
 auto Index::rpset(const Token &t) -> std::vector<int> {
     int l = m[t.id].dfn.in;
     int r = m[t.id].dfn.out + 1;
-    std::vector<int> set(sorted.begin() + l, sorted.begin() + r);
+    std::vector<int> set(_sorted.begin() + l, _sorted.begin() + r);
 
     std::sort(set.begin(), set.end());
     set.erase(unique(set.begin(), set.end()), set.end());

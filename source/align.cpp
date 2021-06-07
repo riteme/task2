@@ -10,10 +10,9 @@
 
 namespace {
 
-using namespace core;
-
-constexpr int MISMATCH_COST = 10;
-constexpr int MATCH_COST = 1;
+constexpr int MISS_COST = 10;
+constexpr int CHAR_COST = 1;
+constexpr int FULL_COST = MISS_COST + CHAR_COST;
 constexpr int H_VALUE = 5;
 
 struct Key {
@@ -28,31 +27,20 @@ struct Key {
     }
 };
 
-struct Value {
-    int t = 0, l = 0;
-
-    bool operator<(const Value &rhs) const {
-        return t < rhs.t;
-    }
-};
-
-struct Pair {
+struct State {
     Key key;
-    Value value;
+    int t = 0, l = 0;
 };
 
-struct PairComparer {
+struct Heuristic {
     int n;
 
-    auto estimate(const Pair &p) const -> Key {
-        return {
-            p.value.t + H_VALUE * (n - p.key.y),
-            p.value.l
-        };
+    auto estimate(const State &s) -> int {
+        return s.t + H_VALUE * (n - s.key.y);
     }
 
-    bool operator()(const Pair &lhs, const Pair &rhs) const {
-        return estimate(rhs) < estimate(lhs);
+    bool operator()(const State &lhs, const State &rhs) {
+        return estimate(lhs) > estimate(rhs);
     }
 };
 
@@ -63,7 +51,7 @@ namespace std {
 template <>
 struct hash<Key> {
     auto operator()(const Key &z) const -> size_t {
-        return (size_t(z.x) * 19260817) ^ (size_t(z.y) * 0x19260817);
+        return ((z.x << 15) ^ z.y) * 0x19260817;
     }
 };
 
@@ -73,31 +61,24 @@ namespace core {
 
 auto Index::align(const BioSeq &s) -> Alignment {
     int n = s.size();
-    std::priority_queue<
-        Pair, std::vector<Pair>, PairComparer
-    > q(PairComparer{n});
-    q.push(Pair());
+    std::priority_queue<State, std::vector<State>, Heuristic> q(Heuristic{n});
+    tsl::robin_map<Key, int> best;
 
-    // std::unordered_map<Key, Value> f;
-    tsl::robin_map<Key, Value> f;
-    f[Key()] = Value();
+    auto probe = [&best, &q](const State &v) {
+        auto it = best.find(v.key);
 
-    auto probe = [&](const Pair &t) {
-        auto it = f.find(t.key);
-
-        if (it == f.end() || t.value < it->second) {
-            if (it == f.end())
-                f[t.key] = t.value;
-            else {
-                // it->second = t.value;
-                it.value() = t.value;
-            }
-
-            q.push(t);
+        if (it == best.end()) {
+            best.insert({v.key, v.t});
+            q.push(v);
+        } else if (it->second > v.t) {
+            it.value() = v.t;
+            q.push(v);
         }
     };
 
-    Pair opt;
+    probe(State());
+
+    State opt;
     size_t max_queue_size = 0;
 
     do {
@@ -105,7 +86,7 @@ auto Index::align(const BioSeq &s) -> Alignment {
         auto u = q.top();
         q.pop();
 
-        if (f[u.key] < u.value)
+        if (u.t > best[u.key])
             continue;
 
         if (u.key.y == n) {
@@ -114,31 +95,27 @@ auto Index::align(const BioSeq &s) -> Alignment {
         }
 
         auto [x, y] = u.key;
-        auto [t, l] = u.value;
 
-        probe({{x, y + 1}, {t + MISMATCH_COST + MATCH_COST, l}});
+        probe({{x, y + 1}, u.t + FULL_COST, u.l});
 
-        for (int c = 0; c < SIGMA; c++) {
+        for (int c = 0; c < ALPHABET_SIZE; c++) {
             int z = m[x].transition[c];
             if (!z)
                 continue;
 
-            int v = (c == CMAP[s[y + 1]] ? 0 : MISMATCH_COST) + MATCH_COST;
-            probe({{z, y + 1}, {t + v, l + 1}});
-            probe({{z, y}, {t + MISMATCH_COST + MATCH_COST, l + 1}});
+            int cost = (c == CMAP[s[y + 1]] ? 0 : MISS_COST) + CHAR_COST;
+            probe({{z, y + 1}, u.t + cost, u.l + 1});
+            probe({{z, y}, u.t + FULL_COST, u.l + 1});
         }
     } while (!q.empty());
 
     AlignmentDebugInfo debug;
-    debug.n_state_visited = f.size();
+    debug.n_state_visited = best.size();
     debug.max_queue_size = max_queue_size;
 
-    // 20x + (y + l + x) = 2t
-    debug.pure_loss = (2 * opt.value.t - opt.key.y - opt.value.l) / 21;
-
     return Alignment{
-        {opt.key.x, opt.value.l},
-        opt.value.t, debug
+        {opt.key.x, opt.l},
+        opt.t, debug
     };
 }
 
