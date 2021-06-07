@@ -3,10 +3,11 @@
 #include <atomic>
 #include <vector>
 #include <thread>
+#include <chrono>
 #include <fstream>
 
 #include "core.hpp"
-#include "thirdparty/rash/rash.hpp"
+#include "rash/rash.hpp"
 
 
 constexpr int K = 20;
@@ -15,18 +16,24 @@ constexpr auto NVG_FONT_SIZE = 25.0f;
 int main() {
     Application app("Alignment Visualization");
 
+    struct WorkerInfo {
+        int position;
+        int total_state_visited;
+        float time_used;
+    };
+
     bool show_demo = false;
-    char ref_path[1024] = "";
-    char runs_path[1024] = "";
-    char bed_path[1024] = "";
+    char ref_path[1024] = "../data/shit/ref.fasta";
+    char runs_path[1024] = "../data/shit/long.fasta";
+    char bed_path[1024] = "../data/shit/sv.bed";
     core::Dict ref, runs;
     int run_id = 0;
     std::mutex lock;
     std::vector<std::vector<int>> sv;
     std::vector<std::map<Vec2i, int>> locations;
-    std::vector<int> positions;
+    std::vector<WorkerInfo> info;
     std::vector<core::Index *> indexes;
-    float marker_alpha = 3.0f;
+    float marker_alpha = 1.0f;
 
     auto reset_markers = [&] {
         lock.lock();
@@ -34,8 +41,8 @@ int main() {
         locations.resize(ref.size());
         lock.unlock();
 
-        positions.clear();
-        positions.resize(ref.size() * 2);
+        info.clear();
+        info.resize(ref.size() * 2);
     };
 
     auto load_files = [&] {
@@ -51,7 +58,7 @@ int main() {
         auto read_one = [&] {
             std::string name, left_literal, right_literal;
             fp >> name >> left_literal >> right_literal;
-            printf("%s %s %s\n", name.data(), left_literal.data(), right_literal.data());
+            // printf("%s %s %s\n", name.data(), left_literal.data(), right_literal.data());
 
             int left = std::stoi(left_literal);
             int right = std::stoi(right_literal);
@@ -94,6 +101,9 @@ int main() {
     std::atomic<bool> locate_disabled;
 
     auto locate = [&](int id, int ref_id, int y, bool rev) {
+        using clock = std::chrono::high_resolution_clock;
+        auto t_begin = clock::now();
+
         std::string seq;
         seq.resize(K);
 
@@ -117,13 +127,15 @@ int main() {
 
         for (int i = 0; i + K <= run.sequence.size(); i++) {
             if (locate_disabled)
-                return;
+                break;
 
             for (int j = 0; j < K; j++) {
                 seq[j] = run.sequence[i + j];
             }
 
             auto alignment = index->align(seq);
+            info[id].total_state_visited += alignment.debug.n_state_visited;
+
             auto set = index->rpset(alignment.token);
 
             lock.lock();
@@ -135,8 +147,12 @@ int main() {
             }
             lock.unlock();
 
-            positions[id] = i + 1;
+            info[id].position = i + 1;
         }
+
+        auto t_end = clock::now();
+        auto span = std::chrono::duration_cast<std::chrono::duration<float>>(t_end - t_begin).count();
+        info[id].time_used = span;
     };
 
     app.run([&] {
@@ -196,16 +212,25 @@ int main() {
         if (show_demo)
             ImGui::ShowDemoWindow(&show_demo);
 
+        if (ImGui::Button("Clear##1"))
+            ref_path[0] = 0;
+        ImGui::SameLine();
         if (ImGui::Button("Open...##1"))
             zenity_file_selection_fgets("Select reference file", ref_path, 1024);
         ImGui::SameLine();
         ImGui::InputText("ref", ref_path, 1024);
 
+        if (ImGui::Button("Clear##2"))
+            runs_path[0] = 0;
+        ImGui::SameLine();
         if (ImGui::Button("Open...##2"))
             zenity_file_selection_fgets("Select run file", runs_path, 1024);
         ImGui::SameLine();
         ImGui::InputText("runs", runs_path, 1024);
 
+        if (ImGui::Button("Clear##3"))
+            bed_path[0] = 0;
+        ImGui::SameLine();
         if (ImGui::Button("Open...##3"))
             zenity_file_selection_fgets("Select sv.bed", bed_path, 1024);
         ImGui::SameLine();
@@ -214,7 +239,6 @@ int main() {
         if (ImGui::Button("Load"))
             load_files();
 
-        int int_zero = 0;
         int run_id_max = runs.size() - 1;
         bool loaded = ref.size() > 0 && runs.size() > 0;
         if (loaded) {
@@ -255,8 +279,11 @@ int main() {
                 runs[run_id].name.data(), runs[run_id].sequence.size(), K
             );
 
-            for (int i = 0; i < positions.size(); i++) {
-                ImGui::Text("[%d]: %d", i, positions[i]);
+            for (int i = 0; i < info.size(); i++) {
+                ImGui::Text(
+                    "[%d]: pos=%d, sum=%d, time=%.3f",
+                    i, info[i].position, info[i].total_state_visited, info[i].time_used
+                );
             }
         }
 

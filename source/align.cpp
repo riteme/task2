@@ -1,8 +1,9 @@
 #include <cstdio>
 
-#include <map>
 #include <queue>
 #include <tuple>
+
+#include "tsl/robin_map.h"
 
 #include "index.hpp"
 
@@ -11,6 +12,10 @@ namespace {
 
 struct Key {
     int x = 1, y = 0;
+
+    bool operator==(const Key &rhs) const {
+        return x == rhs.x && y == rhs.y;
+    }
 
     bool operator<(const Key &rhs) const {
         return std::tie(x, y) < std::tie(rhs.x, rhs.y);
@@ -37,7 +42,7 @@ struct Pair {
         int remain = current_len - key.y;
 
         return {
-            value.t + 2 * remain,
+            value.t + 3 * remain,
             value.l
         };
 
@@ -52,18 +57,29 @@ struct Pair {
 
 }
 
+namespace std {
+
+template <>
+struct hash<Key> {
+    auto operator()(const Key &z) const -> size_t {
+        return (size_t(z.x) * 19260817) ^ (size_t(z.y) * 0x19260817);
+    }
+};
+
+};
+
 namespace core {
 
 auto Index::align(const BioSeq &s) -> Alignment {
     int n = s.size();
-    int max_reach = 0;
     current_len = n;
 
-    size_t max_size = 0;
+    size_t max_queue_size = 0;
     std::priority_queue<Pair> q;
     q.push(Pair());
 
-    std::map<Key, Value> f;
+    // std::unordered_map<Key, Value> f;
+    tsl::robin_map<Key, Value> f;
     f[Key()] = Value();
 
     auto probe = [&](const Pair &t) {
@@ -72,8 +88,10 @@ auto Index::align(const BioSeq &s) -> Alignment {
         if (it == f.end() || t.value < it->second) {
             if (it == f.end())
                 f[t.key] = t.value;
-            else
-                it->second = t.value;
+            else {
+                // it->second = t.value;
+                it.value() = t.value;
+            }
 
             q.push(t);
         }
@@ -81,14 +99,8 @@ auto Index::align(const BioSeq &s) -> Alignment {
 
     Pair opt;
     do {
-        max_size = std::max(max_size, q.size());
+        max_queue_size = std::max(max_queue_size, q.size());
         auto u = q.top();
-        max_reach = std::max(max_reach, u.value.l + u.key.y);
-        if (f.size() % 1000000 <= 2)
-            fprintf(stderr, "f.size()=%zu, x=%d, y=%d, t=%d, l=%d, max=%d\n",
-                f.size(), u.key.x, u.key.y, u.value.t, u.value.l, max_reach);
-        if (f.size() > 20000000)
-            break;
         q.pop();
 
         if (f[u.key] < u.value)
@@ -109,21 +121,21 @@ auto Index::align(const BioSeq &s) -> Alignment {
             if (!z)
                 continue;
 
-            probe({{z, y + 1}, {t + (c == CMAP[s[y + 1]] ? 1 : 6), l + 1}});
+            probe({{z, y + 1}, {t + (c == CMAP[s[y + 1]] ? 1 : 11), l + 1}});
             probe({{z, y}, {t + 11, l + 1}});
         }
     } while (!q.empty());
 
+    AlignmentDebugInfo debug;
+    debug.n_state_visited = f.size();
+    debug.max_queue_size = max_queue_size;
+
     // 20x + (y + l + x) = 2t
-    int loss = (2 * opt.value.t - opt.key.y - opt.value.l) / 21;
-    printf("opt: x=%d, y=%d, t=%d, l=%d, loss=%d\n",
-        opt.key.x, opt.key.y, opt.value.t, opt.value.l, loss);
-    printf("q.max_size=%zu, q.size()=%zu, f.size()=%zu\n",
-        max_size, q.size(), f.size());
+    debug.pure_loss = (2 * opt.value.t - opt.key.y - opt.value.l) / 21;
 
     return Alignment{
         {opt.key.x, opt.value.l},
-        opt.value.t
+        opt.value.t, debug
     };
 }
 

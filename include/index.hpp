@@ -32,9 +32,16 @@ struct Token {
     int len = 0;
 };
 
+struct AlignmentDebugInfo {
+    int n_state_visited;
+    int max_queue_size;
+    int pure_loss;
+};
+
 struct Alignment {
     Token token;
     int loss;
+    AlignmentDebugInfo debug;
 };
 
 class Index {
