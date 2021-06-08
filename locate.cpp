@@ -35,10 +35,49 @@ int main(int argc, char *argv[]) {
         index.build();
         printf("index built for %s.\n", ref[i].name.data());
 
+        double max_match_rate = std::numeric_limits<double>::min();
+        double min_match_rate = std::numeric_limits<double>::max();
         for (int j = 0; j < runs.size(); j++) {
             if (!core::startswith(runs[j].name, idx))
                 continue;
+
+            auto &t = runs[j].sequence;
+            auto location = index.fuzzy_locate(t);
+
+            auto s = core::BioSeq(ref[i].sequence, location.left, location.right + 1);
+
+            core::Alignment result;
+            if (location.reversed) {
+                auto q = core::watson_crick_complement(t);
+                result = core::local_align(s, q);
+            } else
+                result = core::local_align(s, t);
+
+            int left = result.range1.begin + location.left - 1;
+            int right = result.range1.end - 1 + location.left - 1;
+            int length = result.range1.end - result.range1.begin;
+            double match_rate = double(t.size() - result.loss) / t.size();
+            max_match_rate = std::max(max_match_rate, match_rate);
+            min_match_rate = std::min(min_match_rate, match_rate);
+
+            printf(
+                "%s @%s: [%d, %d], loss=%d (%.3lf%%), ratio=%.3lf, rev=%d\n",
+                runs[j].name.data(),
+                ref[i].name.data(),
+                left, right,
+                result.loss,
+                match_rate * 100,
+                double(length) / runs[j].sequence.size(),
+                location.reversed
+            );
         }
+
+        fprintf(stderr,
+            "%s: min=%.3lf, max=%.3lf\n",
+            ref[i].name.data(),
+            min_match_rate * 100,
+            max_match_rate * 100
+        );
     }
 
     return 0;

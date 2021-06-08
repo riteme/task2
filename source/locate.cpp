@@ -32,6 +32,13 @@ auto Index::fuzzy_locate(const BioSeq &seq) -> Location {
         bucket[i][j]++;
     };
 
+    auto probe = [&bucket](int i, int j) -> int {
+        auto it = bucket[i].find(j);
+        if (it != bucket[i].end())
+            return it->second;
+        return 0;
+    };
+
     for (int i = 0; i < NUM_SEQ; i++) {
         for (int l = 1; l + KMER - 1 <= n; l += STEP) {
             auto t = align(s[i].take(l, l + KMER)).token;
@@ -42,16 +49,33 @@ auto Index::fuzzy_locate(const BioSeq &seq) -> Location {
         }
     }
 
-    int max_count = std::numeric_limits<int>::min(), best_i = 0, best_j = 0;
+    int max_score = std::numeric_limits<int>::min(), best_i = 0, best_j = 0;
     for (int i = 0; i < 2; i++) {
         for (auto &p : bucket[i]) {
-            if (p.second > max_count) {
-                max_count = p.second;
+            int j = p.first;
+            int self = p.second;
+            int prev = probe(i, j - 1);
+            int succ = probe(i, j + 1);
+            if (self < prev || self < succ)
+                continue;
+
+            int score = prev + self + succ;
+
+            if (score > max_score) {
+                max_score = score;
                 best_i = i;
-                best_j = p.first;
+                best_j = j;
             }
         }
     }
+
+    printf("bucket[%d][%d..%d] = {", best_i, best_j - 5, best_j + 5);
+    for (int k = -5; k <= +5; k++) {
+        printf("%d", bucket[best_i][best_j + k]);
+        if (k < +5)
+            printf(", ");
+    }
+    printf("}\n");
 
     Location result;
     result.reversed = best_i == 0 ? false : true;

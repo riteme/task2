@@ -59,6 +59,70 @@ struct hash<Key> {
 
 namespace core {
 
+auto local_align(const BioSeq &s1, const BioSeq &s2) -> Alignment {
+    constexpr int INF = 0x3f3f3f3f;
+    struct Value {
+        int t, l;
+
+        static auto zero() -> Value {
+            return {0, 0};
+        }
+
+        static auto max() -> Value {
+            return {INF, INF};
+        }
+
+        bool operator<(const Value &rhs) const {
+            return t == rhs.t ? l < rhs.l : t < rhs.t;
+        }
+
+        auto operator+(const Value &rhs) const -> Value {
+            return {t + rhs.t, l + rhs.l};
+        }
+    };
+
+    auto update = [](Value &dest, const Value &val) {
+        if (val < dest)
+            dest = val;
+    };
+
+    int n = s1.size(), m = s2.size();
+    std::vector<Value> f;
+
+    f.resize(m + 1);
+    for (int i = 0; i <= m; i++) {
+        f[i] = {i, 0};
+    }
+
+    auto opt = Value::max();
+    int opt_i = 0;
+    for (int i = 1; i <= n; i++) {
+        for (int j = m; j > 0; j--) {
+            f[j] = f[j] + Value{1, 1};
+            if (s1[i] == s2[j])
+                update(f[j], f[j - 1] + Value{0, 1});
+        }
+
+        update(f[0], {0, 0});
+
+        for (int j = 1; j <= m; j++) {
+            update(f[j], f[j - 1] + Value{1, 0});
+        }
+
+        if (f[m] < opt) {
+            opt = f[m];
+            opt_i = i;
+        }
+    }
+
+    Alignment result;
+    result.range1 = {opt_i - opt.l + 1, opt_i + 1};
+    result.range2 = {1, m + 1};
+    result.loss = opt.t;
+
+    return result;
+}
+
 auto Index::align(const BioSeq &s) -> Alignment {
     int n = s.size();
     std::priority_queue<State, std::vector<State>, Heuristic> q(Heuristic{n});

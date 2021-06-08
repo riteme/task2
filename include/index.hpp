@@ -27,30 +27,41 @@ constexpr int CMAP[256] = {
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 };
 
-struct Token {
-    int id = 1;
-    int len = 0;
-};
-
-struct Location {
-    bool reversed;
-    int left;
-    int right;
-};
-
-struct AlignmentDebugInfo {
-    int n_state_visited;
-    int max_queue_size;
+struct Range {
+    int begin, end;
 };
 
 struct Alignment {
-    Token token;
+    Range range1, range2;
     int loss;
-    AlignmentDebugInfo debug;
 };
+
+auto local_align(const BioSeq &s1, const BioSeq &s2) -> Alignment;
 
 class Index {
 public:
+    struct Token {
+        int id = 1;
+        int len = 0;
+    };
+
+    struct Location {
+        bool reversed;
+        int left;
+        int right;
+    };
+
+    struct AlignmentDebugInfo {
+        int n_state_visited;
+        int max_queue_size;
+    };
+
+    struct Alignment {
+        Token token;
+        int loss;
+        AlignmentDebugInfo debug;
+    };
+
     Index();
 
     auto size() -> int {

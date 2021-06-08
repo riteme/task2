@@ -21,44 +21,52 @@ template <typename T, typename TContainer>
 class Slice {
 public:
     TContainer &internal;
-    int start, length;
 
     Slice(TContainer &_internal)
-        : internal(_internal), start(0), length(_internal.size()) {}
-    Slice(TContainer &_internal, int _start, int _length)
-        : internal(_internal), start(_start), length(_length) {}
+        : internal(_internal), m_begin(_internal.begin()), m_end(_internal.end()) {}
+    Slice(TContainer &_internal, int begin, int end)
+        : internal(_internal),
+          m_begin(_internal.begin() + (begin - 1)),
+          m_end(_internal.begin() + (end - 1)) {}
 
     auto begin() {
-        return internal.begin() + start;
+        return m_begin;
     }
 
     auto begin() const {
-        return internal.begin() + start;
+        return m_begin;
     }
 
     auto end() {
-        return internal.begin() + start + length;
+        return m_end;
     }
 
     auto end() const {
-        return internal.begin() + start + length;
+        return m_end;
     }
 
     auto size() const -> int {
-        return length;
+        return m_end - m_begin;
     }
 
     auto &operator[](int i) {
-        return internal[start + i - 1];
+        return *(m_begin + (i - 1));
     }
 
     auto &operator[](int i) const {
-        return internal[start + i - 1];
+        return *(m_begin + (i - 1));
     }
 
-    auto take(int _begin, int _end) const -> Slice {
-        return Slice(internal, start + _begin - 1, _end - _begin);
+    auto take(int begin, int end) const -> Slice {
+        return {internal, m_begin + (begin - 1), m_begin + (end - 1)};
     }
+
+private:
+    using Iterator = decltype(internal.begin());
+    Iterator m_begin, m_end;
+
+    Slice(TContainer &_internal, Iterator _begin, Iterator _end)
+        : internal(_internal), m_begin(_begin), m_end(_end) {}
 };
 
 using BioSeq = Slice<char, std::basic_string<char>>;
