@@ -4,8 +4,9 @@ project(fuzzyta)
 
 # set(CMAKE_BUILD_TYPE Debug)
 set(CMAKE_BUILD_TYPE RelWithDebInfo)
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
+set(CMAKE_EXPORT_COMPILE_COMMANDS True)
 
 find_library(OpenGL GL REQUIRED)
 find_library(SDL2 SDL2 REQUIRED)
@@ -39,5 +40,5 @@ target_compile_options(locate PRIVATE ${cxx_options})
 target_compile_options(locate-demo PRIVATE ${cxx_options})
 
 target_link_libraries(align core)
-target_link_libraries(locate core pthread)
+target_link_libraries(locate core rash pthread)
 target_link_libraries(locate-demo core rash imgui nanovg OpenGL GLEW SDL2 pthread)

@@ -10,8 +10,9 @@ namespace {
 
 constexpr int KMER = 20;
 constexpr int STEP = 3;
-constexpr int MIN_BUCKET_SIZE = 4;
+constexpr int MIN_BUCKET_SIZE = 850;
 constexpr int NUM_SEQ = 2;
+constexpr int MIN_THRESHOLD = 10;
 
 }
 
@@ -49,6 +50,7 @@ auto Index::fuzzy_locate(const BioSeq &seq) -> Location {
         }
     }
 
+    int threshold = std::numeric_limits<int>::max();
     int max_score = std::numeric_limits<int>::min(), best_i = 0, best_j = 0;
     for (int i = 0; i < 2; i++) {
         for (auto &p : bucket[i]) {
@@ -56,12 +58,18 @@ auto Index::fuzzy_locate(const BioSeq &seq) -> Location {
             int self = p.second;
             int prev = probe(i, j - 1);
             int succ = probe(i, j + 1);
-            if (self < prev || self < succ)
+
+            if (self * 2 < prev + succ)
                 continue;
 
             int score = prev + self + succ;
 
             if (score > max_score) {
+                int hi = std::max(self, std::max(prev, succ));
+                int lo = std::min(self, std::min(prev, succ));
+                int gap = hi - lo;
+                threshold = lo - gap / 2;
+
                 max_score = score;
                 best_i = i;
                 best_j = j;
@@ -69,18 +77,34 @@ auto Index::fuzzy_locate(const BioSeq &seq) -> Location {
         }
     }
 
-    printf("bucket[%d][%d..%d] = {", best_i, best_j - 5, best_j + 5);
-    for (int k = -5; k <= +5; k++) {
-        printf("%d", bucket[best_i][best_j + k]);
-        if (k < +5)
-            printf(", ");
+    threshold = std::max(threshold, MIN_THRESHOLD);
+
+    int left = best_j - 1;
+    while (probe(best_i, left - 1) >= threshold) {
+        left--;
     }
-    printf("}\n");
+
+    int right = best_j + 1;
+    while (probe(best_i, right + 1) >= threshold) {
+        right++;
+    }
+
+    // printf("bucket[%d][%d..%d] = {", best_i, left - 5, right + 5);
+    // for (int k = left - 5; k <= right + 5; k++) {
+    //     if (k == left)
+    //         printf("[");
+    //     printf("%d", bucket[best_i][k]);
+    //     if (k == right)
+    //         printf("]");
+    //     if (k != right + 5)
+    //         printf(" ");
+    // }
+    // printf("}\n");
 
     Location result;
     result.reversed = best_i == 0 ? false : true;
-    result.left = std::max(1, (best_j - 1) * bucket_size);
-    result.right = std::min(size(), (best_j + 2) * bucket_size - 1);
+    result.left = std::max(1, left * bucket_size);
+    result.right = std::min(size(), (right + 2) * bucket_size - 1);
 
     return result;
 }
