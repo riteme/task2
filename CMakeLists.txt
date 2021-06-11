@@ -3,6 +3,9 @@ cmake_minimum_required(VERSION 3.20)
 project(fuzzyta)
 
 # set(CMAKE_BUILD_TYPE Debug)
+# set (CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -fno-omit-frame-pointer -fsanitize=undefined,address")
+# set (CMAKE_LINKER_FLAGS_DEBUG "${CMAKE_LINKER_FLAGS_DEBUG} -fno-omit-frame-pointer -fsanitize=undefined,address")
+
 set(CMAKE_BUILD_TYPE RelWithDebInfo)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
@@ -26,6 +29,7 @@ add_subdirectory(thirdparty/rash)
 add_executable(align align.cpp)
 add_executable(locate locate.cpp)
 add_executable(locate-demo locate-demo.cpp)
+add_executable(dump dump.cpp)
 
 set(cxx_options
     -Wall
@@ -38,7 +42,9 @@ target_compile_options(core PRIVATE ${cxx_options})
 target_compile_options(align PRIVATE ${cxx_options})
 target_compile_options(locate PRIVATE ${cxx_options})
 target_compile_options(locate-demo PRIVATE ${cxx_options})
+target_compile_options(dump PRIVATE ${cxx_options})
 
 target_link_libraries(align core)
 target_link_libraries(locate core rash pthread)
 target_link_libraries(locate-demo core rash imgui nanovg OpenGL GLEW SDL2 pthread)
+target_link_libraries(dump core)

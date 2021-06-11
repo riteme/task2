@@ -96,7 +96,7 @@ void Index::_traverse(int x, int &count) {
     m[x].dfn.out = count;
 }
 
-auto Index::rpset(const Token &t) -> std::vector<int> {
+auto Index::rpset(const Token &t) const -> std::vector<int> {
     int l = m[t.id].dfn.in;
     int r = m[t.id].dfn.out + 1;
     std::vector<int> set(_sorted.begin() + l, _sorted.begin() + r);
@@ -107,7 +107,7 @@ auto Index::rpset(const Token &t) -> std::vector<int> {
     return set;
 }
 
-auto Index::next(const Token &t, int c) -> Token {
+auto Index::next(const Token &t, int c) const -> Token {
     auto [x, l] = t;
     while (!m[x].transition[c]) {
         x = m[x].fail;
@@ -117,7 +117,7 @@ auto Index::next(const Token &t, int c) -> Token {
     return {m[x].transition[c], l + 1};
 }
 
-auto Index::locate(const BioSeq &s) -> Token {
+auto Index::locate(const BioSeq &s) const -> Token {
     Token t;
     for (int i = 1; i <= s.size(); i++) {
         t = next(t, CMAP[s[i]]);

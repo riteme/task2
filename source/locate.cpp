@@ -18,7 +18,7 @@ constexpr int MIN_THRESHOLD = 10;
 
 namespace core {
 
-auto Index::fuzzy_locate(const BioSeq &seq) -> Location {
+auto Index::fuzzy_locate(const BioSeq &seq) const -> Location {
     int n = seq.size();
 
     std::string rev_seq = watson_crick_complement(seq.internal);

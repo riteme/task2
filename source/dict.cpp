@@ -72,4 +72,12 @@ void Dict::sort_by_name() {
     );
 }
 
+auto Dict::find(const std::string &name) -> DictEntry * {
+    for (auto &e : _entries) {
+        if (e.name == name)
+            return &e;
+    }
+    abort();
+}
+
 }

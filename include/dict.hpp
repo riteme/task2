@@ -25,6 +25,7 @@ class Dict {
 public:
     void load_file(const std::string &path);
     void sort_by_name();
+    auto find(const std::string &name) -> DictEntry *;
 
     auto &operator[](size_t i) {
         return _entries[i];

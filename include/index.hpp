@@ -29,14 +29,38 @@ constexpr int CMAP[256] = {
 
 struct Range {
     int begin, end;
+
+    auto length() const -> int {
+        return end - begin;
+    }
 };
 
 struct Alignment {
     Range range1, range2;
     int loss;
+
+    auto length1() const -> int {
+        return range1.length();
+    }
+
+    auto length2() const -> int {
+        return range2.length();
+    }
+
+    auto rate1() const -> double {
+        return double(loss) / length1();
+    }
+
+    auto rate2() const -> double {
+        return double(loss) / length2();
+    }
 };
 
 auto local_align(const BioSeq &s1, const BioSeq &s2) -> Alignment;
+auto concat_align(const BioSeq &s1, const BioSeq &s2) -> Alignment;
+auto sublocal_span(const BioSeq &s1, const BioSeq &s2) -> Alignment;
+auto prefix_span(const BioSeq &s1, const BioSeq &s2) -> Alignment;
+auto suffix_span(const BioSeq &s1, const BioSeq &s2) -> Alignment;
 
 class Index {
 public:
@@ -64,19 +88,20 @@ public:
 
     Index();
 
-    auto size() -> int {
+    auto size() const -> int {
         return _n_appended;
     }
 
     void append(int c);
     void append(const BioSeq &s);
     void build();
-    auto rpset(const Token &t) -> std::vector<int>;
 
-    auto next(const Token &t, int c) -> Token;
-    auto locate(const BioSeq &s) -> Token;
-    auto align(const BioSeq &s) -> Alignment;
-    auto fuzzy_locate(const BioSeq &s) -> Location;
+    auto rpset(const Token &t) const -> std::vector<int>;
+
+    auto next(const Token &t, int c) const -> Token;
+    auto locate(const BioSeq &s) const -> Token;
+    auto align(const BioSeq &s) const -> Alignment;
+    auto fuzzy_locate(const BioSeq &s) const -> Location;
 
 private:
     struct Node {
