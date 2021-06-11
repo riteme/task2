@@ -85,10 +85,72 @@ struct Record {
     }
 };
 
+struct AllocateCounter {
+    static int count;
+    static int history_max;
+
+    static void reset() {
+        count = 0;
+        history_max = 0;
+    }
+
+    static void increase() {
+        count++;
+        history_max = std::max(history_max, count);
+    }
+
+    static void decrease() {
+        count--;
+    }
+
+    AllocateCounter() {
+        increase();
+    }
+
+    ~AllocateCounter() {
+        decrease();
+    }
+};
+
+int AllocateCounter::count;
+int AllocateCounter::history_max;
+
+struct Node {
+    AllocateCounter _counter;
+
+    using NodeRef = Node *;
+
+    Node() : data(Record::max()) {}
+    Node(const Record &_data) : data(_data) {}
+    Node(int t, int l1, int l2) : data({t, l1, l2}) {}
+    Node(const NodeRef &src, const Record &delta) : data(src->data + delta), next(src) {}
+
+    Node(const Node &) = default;
+    Node(Node &&) = default;
+    Node &operator=(const Node &) = default;
+    Node &operator=(Node &&) = default;
+
+    Record data;
+    NodeRef next = nullptr;
+
+    void update(const NodeRef &src) {
+        if (src->data < data)
+            *this = *src;
+    }
+
+    void update(const NodeRef &src, const Record &delta) {
+        auto new_value = src->data + delta;
+        if (new_value < data) {
+            data = new_value;
+            next = src;
+        }
+    }
+};
+
 template <typename T>
-void update(T &dest, const T &value) {
-    if (value < dest)
-        dest = value;
+void update(T &dest, const T &new_value) {
+    if (new_value < dest)
+        dest = new_value;
 }
 
 }
@@ -171,64 +233,93 @@ static inline auto _partial_span_impl(
     const TCompare &compare,
     const TOutput &output
 ) -> Alignment {
-    constexpr int PENALTY = 4;
+    constexpr int PENALTY = 10;
 
     int n = s1.size(), m = s2.size();
 
-    std::vector<Record> f[2];
-    for (int i = 0; i < 2; i++) {
-        f[i].resize(m + 1);
+    std::vector<std::vector<Node>> f[2];
+    for (int c = 0; c < 2; c++) {
+        f[c].resize(n + 1);
+        f[c][0].reserve(m + 1);
         for (int j = 0; j <= m; j++) {
-            f[i][j] = {j, 0, j};
+            f[c][0].emplace_back(j, 0, j);
+            if (j > 0)
+                f[c][0][j].next = &f[c][0][j - 1];
+        }
+
+        for (int i = 1; i <= n; i++) {
+            f[c][i].resize(m + 1, Node(Record::max()));
         }
     }
 
-    std::vector<Record> opt;
-    opt.resize(m + 1, Record::max());
-
     for (int i = 1; i <= n; i++) {
         for (int j = m; j > 0; j--) {
-            f[1][j] = f[1][j] + Record{1, 1, 0};
-            update(f[1][j], f[0][j] + Record{1 + PENALTY, 1, 0});
+            f[1][i][j].update(&f[1][i - 1][j], Record{1, 1, 0});
+            f[1][i][j].update(&f[0][i - 1][j], Record{1 + PENALTY, 1, 0});
 
-            f[0][j] = Record::max();
             if (compare(i, j)) {
-                update(f[0][j], f[0][j - 1] + Record{0, 1, 1});
-                update(f[0][j], f[1][j - 1] + Record{0, 1, 1});
+                f[0][i][j].update(&f[0][i - 1][j - 1], Record{0, 1, 1});
+                f[0][i][j].update(&f[1][i - 1][j - 1], Record{0, 1, 1});
             }
         }
 
-        f[0][0] = Record::max();
-        f[1][0] = f[1][0] + Record{1, 1, 0};
-        update(f[1][0], f[0][0] + Record{1 + PENALTY, 1, 0});
+        f[1][i][0].update(&f[1][i - 1][0], Record{1, 1, 0});
+        f[1][i][0].update(&f[0][i - 1][0], Record{1 + PENALTY, 1, 0});
 
         for (int j = 1; j <= m; j++) {
-            update(f[1][j], f[1][j - 1] + Record{1, 0, 1});
-            update(f[1][j], f[0][j - 1] + Record{1 + PENALTY, 0, 1});
+            f[1][i][j].update(&f[1][i][j - 1], Record{1, 0, 1});
+            f[1][i][j].update(&f[0][i][j - 1], Record{1 + PENALTY, 0, 1});
         }
+    }
 
-        for (int j = 0; j <= m; j++) {
-            update(opt[j], f[0][j]);
-            update(opt[j], f[1][j]);
-        }
+    auto opt = f[0][n][m];
+    opt.update(&f[1][n][m]);
+
+    std::vector<Record> trace_i, trace_j;
+    trace_i.resize(n + 1);
+    trace_j.resize(m + 1);
+    for (auto x = &opt; x; x = x->next) {
+        int i = x->data.l1;
+        int j = x->data.l2;
+
+        if (j > 0 && i > trace_j[j].l1)
+            trace_j[j] = x->data;
+        if (i > 0 && j > trace_i[i].l2)
+            trace_i[i] = x->data;
     }
 
     printf("ListPlot[{Style[{");
     for (int j = 1; j <= m; j++) {
-        printf("{%d,%d}", j, opt[j].l1);
+        printf("{%d,%d}", j, trace_j[j].l1);
         if (j < m)
             printf(",");
     }
-    puts("},Black]}]");
+    puts("},Black],Style[{");
+    for (int i = 1; i <= n; i++) {
+        printf("{%d,%d}", i, trace_i[i].l2);
+        if (i < n)
+            printf(",");
+    }
+    puts("},Red]}]");
 
     std::vector<Vec2d> vs;
     vs.resize(m + 1);
     for (int j = 0; j <= m; j++) {
-        vs[j] = Vec2d(j, opt[j].l1);
+        vs[j] = Vec2d(j, trace_j[j].l1);
     }
 
-    int lp = bend_detect(vs);
-    auto &best = opt[lp];
+    int p = bend_detect(vs);
+    Record best;
+    if (p == 0) {
+        vs.resize(n + 1);
+        for (int i = 0; i <= n; i++) {
+            vs[i] = Vec2d(i, trace_i[i].l2);
+        }
+        p = bend_detect(vs);
+        best = trace_i[p];
+    } else
+        best = trace_j[p];
+
     return output(best, best.l1, best.l2);
 }
 

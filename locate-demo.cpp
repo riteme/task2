@@ -29,9 +29,9 @@ int main() {
     };
 
     bool show_demo = false;
-    char ref_path[1024] = "../data/shit/ref.fasta";
-    char runs_path[1024] = "../data/shit/long.fasta";
-    char bed_path[1024] = "../data/shit/sv.bed";
+    char ref_path[1024] = "../data/sample/ref.fasta";
+    char runs_path[1024] = "../data/sample/long.fasta";
+    char bed_path[1024] = "../data/sample/sv.bed";
     core::Dict ref, runs;
     int run_id = 0;
     std::mutex lock;
