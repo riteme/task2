@@ -18,7 +18,7 @@ auto bend_detect(const std::vector<Vec2d> &vs) -> int {
             vs.begin() + i - SPAN,
             vs.begin() + i + SPAN + 1,
             LEAST_SQUARE_REDUCE
-        );
+        ).k();
 
         if (ks[i] > MAX_SLOPE)
             ks[i] = MAX_SLOPE;

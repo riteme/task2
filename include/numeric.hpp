@@ -32,6 +32,22 @@ struct Vec2 {
         return hypot(x, y);
     }
 
+    auto k() const -> double {
+        return x;
+    }
+
+    auto k() -> double & {
+        return x;
+    }
+
+    auto b() const -> double {
+        return y;
+    }
+
+    auto b() -> double & {
+        return y;
+    }
+
     auto unit() const -> Vec2<double> {
         return Vec2<double>(*this) / len();
     }
@@ -72,7 +88,7 @@ concept Vec2dIterator = requires (TIterator it) {
 };
 
 template <Vec2dIterator TIterator>
-auto linear_least_square(TIterator beg, TIterator end, int n_reduce = 0) -> double {
+auto linear_least_square(TIterator beg, TIterator end, int n_reduce = 0) -> Vec2d {
     constexpr int N_THRESHOLD = 30;
 
     int n = 0;
@@ -107,11 +123,12 @@ auto linear_least_square(TIterator beg, TIterator end, int n_reduce = 0) -> doub
                 vs.push_back(*it);
         }
 
-        if (vs.size() >= N_THRESHOLD)
+        if (N_THRESHOLD <= vs.size() && vs.size() < n)
             return linear_least_square(vs.begin(), vs.end(), n_reduce - 1);
     }
 
-    return k;
+    auto b = (sy - k * sx) / n;
+    return {k, b};
 }
 
 auto bend_detect(const std::vector<Vec2d> &vs) -> int;

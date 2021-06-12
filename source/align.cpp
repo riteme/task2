@@ -171,7 +171,7 @@ static inline auto _partial_span_impl(
     const TCompare &compare,
     const TOutput &output
 ) -> Alignment {
-    constexpr int PENALTY = 4;
+    constexpr int PENALTY = 3;
 
     int n = s1.size(), m = s2.size();
 
@@ -213,22 +213,62 @@ static inline auto _partial_span_impl(
         }
     }
 
-    printf("ListPlot[{Style[{");
-    for (int j = 1; j <= m; j++) {
-        printf("{%d,%d}", j, opt[j].l1);
-        if (j < m)
-            printf(",");
-    }
-    puts("},Black]}]");
-
     std::vector<Vec2d> vs;
     vs.resize(m + 1);
     for (int j = 0; j <= m; j++) {
         vs[j] = Vec2d(j, opt[j].l1);
     }
 
-    int lp = bend_detect(vs);
-    auto &best = opt[lp];
+    printf("Show[ListPlot[{");
+    for (int j = 1; j <= m; j++) {
+        printf("{%d,%d}", j, opt[j].l1);
+        if (j < m)
+            printf(",");
+    }
+    puts("}]");
+
+    auto deviation = [](const Vec2d &line, const Vec2d &point) {
+        auto y0 = line.k() * point.x + line.b();
+        return std::abs(point.y - y0);
+    };
+
+    int r = 100;
+    for (int t = 0; t < 10; t++) {
+        auto line = linear_least_square(vs.begin(), vs.begin() + r, 8);
+        printf(",Plot[Style[(%.16lf)x+(%.16lf),RGBColor[1.0,0.0,0.0,0.1]], {x, 0, %d}]\n", line.k(), line.b(), m);
+
+        auto max_dev = 0.0;
+        for (int i = 0; 2 * i < r; i++) {
+            max_dev = std::max(max_dev, deviation(line, vs[i]));
+        }
+        fprintf(stderr, "max_dev=%.4lf\n", max_dev);
+        max_dev *= 1.5;
+
+        bool found;
+        do {
+            found = false;
+
+            for (int i = r; i <= m && i <= r + 40; i++) {
+                auto d = deviation(line, vs[i]);
+                if (d < max_dev) {
+                    found = true;
+                    r = i + 1;
+                    break;
+                }
+            }
+        } while (found);
+
+        fprintf(stderr, "r=%d\n", r);
+    }
+
+    printf(
+        ",Epilog->{Directive[RGBColor[0,0,0,0.5]],Line[{{0,%d},{%d,%d}}],Line[{{%d,0},{%d,%d}}]},ImageSize->Full]\n",
+        opt[r - 1].l1, m, opt[r - 1].l1, r - 1, r - 1, n
+    );
+
+    // int lp = bend_detect(vs);
+    // auto best = opt[lp];
+    auto best = opt[0];
     return output(best, best.l1, best.l2);
 }
 
