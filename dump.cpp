@@ -82,8 +82,8 @@ int main(int argc, char *argv[]) {
         );
         printf(
             "(%d, %d, ~%d) (%d, %d, ~%d)\n",
-            info.left + prefix.range1.end, prefix.range2.end, prefix.range2.length(),
-            info.left + suffix.range1.begin, suffix.range2.begin, suffix.range2.length()
+            info.left + prefix.range1.end - 1, prefix.range2.end, prefix.range2.length(),
+            info.left + suffix.range1.begin - 1, suffix.range2.begin, suffix.range2.length()
         );
     }
 

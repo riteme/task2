@@ -232,43 +232,66 @@ static inline auto _partial_span_impl(
         return std::abs(point.y - y0);
     };
 
-    int r = 100;
-    for (int t = 0; t < 10; t++) {
-        auto line = linear_least_square(vs.begin(), vs.begin() + r, 8);
-        printf(",Plot[Style[(%.16lf)x+(%.16lf),RGBColor[1.0,0.0,0.0,0.1]], {x, 0, %d}]\n", line.k(), line.b(), m);
+    int r = 100, last_r = 0;
+    Vec2d primary_line;
+    while (last_r != r) {
+        last_r = r;
+        primary_line = linear_least_square(vs.begin(), vs.begin() + r, 8);
 
-        auto max_dev = 0.0;
+        auto max_dev = 1.0;
         for (int i = 0; 2 * i < r; i++) {
-            max_dev = std::max(max_dev, deviation(line, vs[i]));
+            max_dev = std::max(max_dev, deviation(primary_line, vs[i]));
         }
         fprintf(stderr, "max_dev=%.4lf\n", max_dev);
         max_dev *= 1.5;
 
-        bool found;
-        do {
-            found = false;
+        for (int i = std::min(m, r + 50); i >= r; ) {
+            if (deviation(primary_line, vs[i]) < max_dev) {
+                r = i + 1;
+                i = std::min(m, r + 50);
+            } else
+                i--;
+        }
 
-            for (int i = r; i <= m && i <= r + 40; i++) {
-                auto d = deviation(line, vs[i]);
-                if (d < max_dev) {
-                    found = true;
-                    r = i + 1;
-                    break;
-                }
-            }
-        } while (found);
-
+        printf(
+            ",Plot[Style[(%.16lf)x+(%.16lf),RGBColor[0,0,0,%.2lf]],{x,0,%d}]\n",
+            primary_line.k(), primary_line.b(), (r == last_r ? 1.0 : 0.2), m
+        );
         fprintf(stderr, "r=%d\n", r);
     }
 
-    printf(
-        ",Epilog->{Directive[RGBColor[0,0,0,0.5]],Line[{{0,%d},{%d,%d}}],Line[{{%d,0},{%d,%d}}]},ImageSize->Full]\n",
-        opt[r - 1].l1, m, opt[r - 1].l1, r - 1, r - 1, n
-    );
+    std::vector<Vec2d> neighbors;
 
-    // int lp = bend_detect(vs);
-    // auto best = opt[lp];
-    auto best = opt[0];
+    if (primary_line.k() > 0.8) {
+        neighbors.reserve(45);
+        for (int i = std::max(0, r - 30); i <= m && i <= r + 50; i++) {
+            if (std::abs(opt[r - 1].l1 - opt[i].l1) <= 20)
+                neighbors.push_back(vs[i]);
+        }
+    }
+
+    fprintf(stderr, "neighbors.size()=%zu\n", neighbors.size());
+
+    int corner = 0;
+    if (neighbors.size() > 32) {
+        auto secondary_line = linear_least_square(neighbors.begin(), neighbors.end());
+        auto [x, y] = line_intersection(primary_line, secondary_line);
+
+        printf(
+            ",Plot[Style[(%.16lf)x+(%.16lf),Black],{x,0,%d}]\n",
+            secondary_line.k(), secondary_line.b(), m
+        );
+        printf(
+            ",Epilog->{Directive[RGBColor[1,0,0,0.5]],Line[{{0,%.16lf},{%d,%.16lf}}],Line[{{%.16lf,0},{%.16lf,%d}}]},ImageSize->Full]\n",
+            y, m, y, x, x, n
+        );
+
+        corner = std::max(0, std::min(m, static_cast<int>(std::round(x))));
+    } else {
+        puts(",ImageSize->Full]");
+    }
+
+    auto best = opt[corner];
     return output(best, best.l1, best.l2);
 }
 

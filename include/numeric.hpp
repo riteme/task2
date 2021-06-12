@@ -131,6 +131,6 @@ auto linear_least_square(TIterator beg, TIterator end, int n_reduce = 0) -> Vec2
     return {k, b};
 }
 
-auto bend_detect(const std::vector<Vec2d> &vs) -> int;
+auto line_intersection(const Vec2d &l1, const Vec2d &l2) -> Vec2d;
 
 }
