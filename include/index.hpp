@@ -56,8 +56,10 @@ struct Alignment {
     }
 };
 
+auto full_align(const BioSeq &s1, const BioSeq &s2) -> int;
 auto local_align(const BioSeq &s1, const BioSeq &s2) -> Alignment;
 auto concat_align(const BioSeq &s1, const BioSeq &s2) -> Alignment;
+
 auto sublocal_span(const BioSeq &s1, const BioSeq &s2) -> Alignment;
 auto prefix_span(const BioSeq &s1, const BioSeq &s2) -> Alignment;
 auto suffix_span(const BioSeq &s1, const BioSeq &s2) -> Alignment;

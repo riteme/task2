@@ -29,12 +29,14 @@ auto load_locate_file(const std::string &path) {
 
 int main(int argc, char *argv[]) {
     std::string ref_file, locate_file, runs_file, target;
+    double max_rate = 0.84;
 
     CLI::App args;
     args.add_option("-r", ref_file)->required();
     args.add_option("-p", locate_file)->required();
     args.add_option("-l", runs_file)->required();
-    args.add_option("-t", target)->required();
+    args.add_option("-t", target);
+    args.add_option("-m", max_rate);
     CLI11_PARSE(args, argc, argv);
 
     core::Dict refs, runs;
@@ -50,11 +52,9 @@ int main(int argc, char *argv[]) {
         auto &info = meta[run.name];
 
         auto rate = 1.0 - double(info.loss) / run.sequence.size();
-        // if (rate >= 0.80)
-        //     continue;
-        // if (run.name != "S1_54")
-        //     continue;
-        if (run.name != target)
+        if (rate > max_rate)
+            continue;
+        if (!target.empty() && run.name != target)
             continue;
 
         if (info.reversed)
@@ -66,6 +66,41 @@ int main(int argc, char *argv[]) {
 
         auto prefix = core::prefix_span(s, t);
         auto suffix = core::suffix_span(s, t);
+
+        bool contained = true;
+        core::Vec2i front, back;
+
+        if (100 < prefix.range2.length() && prefix.range2.length() < run.sequence.size() - 100) {
+            front = core::Vec2i(
+                info.left + prefix.range1.end - 1,
+                info.left + prefix.range2.end - 1
+            );
+        } else
+            contained = false;
+
+        if (100 < suffix.range2.length() && suffix.range2.length() < run.sequence.size() - 100) {
+            back = core::Vec2i(
+                info.left + suffix.range1.begin - 2,
+                info.left + suffix.range2.begin - 2
+            );
+        } else
+            contained = false;
+
+        auto inv_match_rate = -1.0;
+        int l1 = front.x, r1 = back.x;
+        int l2 = prefix.range2.end, r2 = suffix.range2.begin - 1;
+        if (contained && 0 < l1 && l1 <= r1 && 0 < l2 && l2 <= r2) {
+            auto reversed = core::watson_crick_complement(
+                run.sequence.substr(l2 - 1, r2 - l2 + 1)
+            );
+
+            int loss = core::full_align(
+                core::BioSeq(ref.sequence, front.x, back.x + 1),
+                reversed
+            );
+
+            inv_match_rate = 1 - 2.0 * loss / (r1 - l1 + 1 + r2 - l2 + 1);
+        }
 
         printf(
             "%s @%s[%d, %d]: %%=%.3lf, n=%d, m=%d, [%d, %d)-[%d, %d)=%d, [%d, %d)-[%d, %d)=%d\n",
@@ -80,10 +115,13 @@ int main(int argc, char *argv[]) {
             suffix.range2.begin, suffix.range2.end,
             suffix.loss
         );
-        printf(
-            "(%d, %d, ~%d) (%d, %d, ~%d)\n",
-            info.left + prefix.range1.end - 1, prefix.range2.end, prefix.range2.length(),
-            info.left + suffix.range1.begin - 1, suffix.range2.begin, suffix.range2.length()
+        fprintf(stderr,
+            "%s %s %d %d %d %d %.16lf\n",
+            run.name.data(),
+            ref.name.data(),
+            front.x, front.y,
+            back.x, back.y,
+            inv_match_rate
         );
     }
 
