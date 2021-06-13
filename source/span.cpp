@@ -54,7 +54,7 @@ void update(T &dest, const T &value) {
 
 namespace core {
 
-template <typename TCompare, typename TOutput, bool Debug = false>
+template <typename TCompare, typename TOutput, bool Debug = true>
 static inline auto _partial_span_impl(
     const BioSeq &s1, const BioSeq &s2,
     const TCompare &compare,
@@ -63,7 +63,7 @@ static inline auto _partial_span_impl(
     constexpr int PENALTY = 3;
 
     constexpr auto MIN_DEVIATION = 1.0;
-    constexpr auto DEVIATION_SCALE = 1.5;
+    constexpr auto DEVIATION_SCALE = 3.0;
     constexpr auto MIN_SLOPE = 0.8;
 
     constexpr int PUSH_STARTUP = 100;
@@ -119,6 +119,32 @@ static inline auto _partial_span_impl(
         vs[j] = Vec2d(j, opt[j].l1);
     }
 
+    auto decomp = french_stick_decompose(vs, 3);
+    fprintf(stderr, "decomp.area = %.4lf\n", decomp.area);
+    fprintf(stderr, "decomp.start = ");
+    for (int i : decomp.start) {
+        fprintf(stderr, "%d ", i);
+    }
+    fprintf(stderr, "\n");
+
+    const char *colors[] = {"RGBColor[1,0,0,0.1]", "RGBColor[0,1,0,0.1]", "RGBColor[0,0,1,0.1]"};
+    printf("ListPlot[{");
+    for (int i = 0; i < decomp.start.size(); i++) {
+        int l = decomp.start[i];
+        int r = i + 1 < decomp.start.size() ? decomp.start[i + 1] : vs.size();
+
+        printf("Style[{");
+        for (int j = l; j < r; j++) {
+            printf("{%.3lf,%.3lf}", vs[j].x, vs[j].y);
+            if (j + 1 < r)
+                printf(",");
+        }
+        printf("},%s]\n", colors[i]);
+        if (i + 1 < decomp.start.size())
+            printf(",");
+    }
+    printf("},ImageSize->Full,PlotRange->All]\n");
+
     if (Debug) {
         printf("Show[ListPlot[{");
         for (int j = 1; j <= m; j++) {
@@ -126,7 +152,7 @@ static inline auto _partial_span_impl(
             if (j < m)
                 printf(",");
         }
-        puts("}]");
+        puts("},PlotRange->All]");
     }
 
     auto deviation = [](const Vec2d &line, const Vec2d &point) {

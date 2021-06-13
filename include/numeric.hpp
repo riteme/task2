@@ -83,6 +83,7 @@ using Vec2d = Vec2<double>;
 
 template <typename TIterator>
 concept Vec2dIterator = requires (TIterator it) {
+    static_cast<Vec2d>(*it);
     static_cast<double>(it->x);
     static_cast<double>(it->y);
 };
@@ -132,5 +133,12 @@ auto linear_least_square(TIterator beg, TIterator end, int n_reduce = 0) -> Vec2
 }
 
 auto line_intersection(const Vec2d &l1, const Vec2d &l2) -> Vec2d;
+
+struct Decomposition {
+    std::vector<int> start;
+    double area;
+};
+
+auto french_stick_decompose(const std::vector<Vec2d> &vs, int K) -> Decomposition;
 
 }
