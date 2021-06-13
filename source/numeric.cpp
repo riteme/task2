@@ -64,8 +64,11 @@ void progressive_convex_hull(T beg, const T &end, U dest) {
 }
 
 void vector_sqrt(std::vector<double> &vs) {
+    constexpr auto BEND_COEFFICIENT = 0.45;
+
     for (auto &v : vs) {
-        v = std::sqrt(v);
+        // v = std::sqrt(v);
+        v = std::pow(v, BEND_COEFFICIENT);
     }
 }
 
@@ -96,7 +99,7 @@ auto french_stick_decompose(const std::vector<Vec2d> &vs, int K) -> Decompositio
     _decompose_impl = [n, &vs, &suffix, &_decompose_impl]
     (int K, int beg) -> Decomposition {
         if (K == 1)
-            return {{beg}, suffix[beg]};
+            return {{{beg, n}}, suffix[beg]};
 
         int m = n - beg;
 
@@ -106,21 +109,26 @@ auto french_stick_decompose(const std::vector<Vec2d> &vs, int K) -> Decompositio
         vector_sqrt(prefix);
 
         auto opt = Decomposition{{}, std::numeric_limits<double>::max()};
+        int opt_i = 0;
         for (int i = 0; i + K <= m; i++) {
+            if (prefix[i] > opt.area)
+                break;
+
             auto subopt = _decompose_impl(K - 1, beg + i + 1);
             auto new_area = prefix[i] + subopt.area;
             if (opt.area > new_area) {
+                opt_i = i;
                 opt.area = new_area;
-                opt.start = std::move(subopt.start);
+                opt.slices = std::move(subopt.slices);
             }
         }
 
-        opt.start.push_back(beg);
+        opt.slices.push_back({beg, beg + opt_i + 1});
         return opt;
     };
 
     auto result = _decompose_impl(K, 0);
-    std::reverse(result.start.begin(), result.start.end());
+    std::reverse(result.slices.begin(), result.slices.end());
     return result;
 }
 

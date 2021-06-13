@@ -27,14 +27,6 @@ constexpr int CMAP[256] = {
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 };
 
-struct Range {
-    int begin, end;
-
-    auto length() const -> int {
-        return end - begin;
-    }
-};
-
 struct Alignment {
     Range range1, range2;
     int loss;

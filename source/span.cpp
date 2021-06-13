@@ -4,6 +4,8 @@
 
 namespace {
 
+using namespace core;
+
 constexpr int INF = 0x3f3f3f3f;
 
 struct Record {
@@ -50,11 +52,103 @@ void update(T &dest, const T &value) {
         dest = value;
 }
 
+template <Vec2dIterator TIterator>
+auto range_slope(TIterator beg, const TIterator &end) -> double {
+    int n = 0;
+    auto min_x = std::numeric_limits<double>::max();
+    auto max_x = std::numeric_limits<double>::min();
+    auto min_y = min_x, max_y = max_x;
+
+    for (auto it = beg; it != end; it++, n++) {
+        min_x = std::min(min_x, it->x);
+        max_x = std::max(max_x, it->x);
+        min_y = std::min(min_y, it->y);
+        max_y = std::max(max_y, it->y);
+    }
+
+    if (n < 2)
+        return 1.0;
+    else if (n < 5)
+        return (max_y - min_y) / 10;
+    else
+        return (max_y - min_y) / std::max(0.1, max_x - min_x);
+}
+
+auto decompose(std::vector<Vec2d> vs) -> Decomposition {
+    constexpr int MIN_SLICE_LEN = 45;
+    constexpr auto MAX_SLOPE = 9.5;
+    constexpr auto SLOPE_DEVIATION_THRESHOLD = 0.1;
+    constexpr int TAIL_CUT_MAX_LENGTH = 25;
+
+    int K = 3;
+
+    Decomposition result;
+    while (K > 0) {
+        auto last_size = vs.size();
+        result = french_stick_decompose(vs, K);
+
+        int fail_count = 0;
+        for (auto &slice : result.slices) {
+            if (slice.length() >= MIN_SLICE_LEN)
+                continue;
+
+            fail_count++;
+
+            // tail erase
+            bool do_erase = slice.end >= vs.size();
+
+            // short cut
+            if (!do_erase && slice.length() > 1) {
+                auto slope = range_slope(vs.begin() + slice.begin, vs.begin() + slice.end);
+                // fprintf(stderr, "slope=%.4lf\n", slope);
+                do_erase = slope > MAX_SLOPE;
+            }
+
+            if (do_erase) {
+                vs.erase(vs.begin() + slice.begin, vs.end());
+                break;
+            }
+        }
+
+        // slice meld
+        if (fail_count == 0 && result.slices.size() > 1) {
+            auto &s1 = result.slices[0];
+            auto &s2 = result.slices[1];
+
+            auto k1 = linear_least_square(vs.begin() + s1.begin, vs.begin() + s1.end).k();
+            auto k2 = linear_least_square(vs.begin() + s2.begin, vs.begin() + s2.end).k();
+            if (std::abs(k1 - k2) <= SLOPE_DEVIATION_THRESHOLD)
+                fail_count++;
+        }
+
+        // tail cut
+        if (fail_count == 0 && result.slices.size() > 1) {
+            auto &s = result.slices[1];
+            int len = std::min(s.length() / 2, TAIL_CUT_MAX_LENGTH);
+            auto left = vs.begin() + s.end - len;
+            auto slope = range_slope(left, vs.begin() + s.end);
+            // fprintf(stderr, "slope=%.4lf\n", slope);
+            if (slope > MAX_SLOPE) {
+                vs.erase(left, vs.end());
+                if (K == 3)
+                    fail_count++;
+            }
+        }
+
+        if (fail_count == 0 && vs.size() == last_size)
+            break;
+
+        K -= fail_count;
+    }
+
+    return result;
+}
+
 }
 
 namespace core {
 
-template <typename TCompare, typename TOutput, bool Debug = true>
+template <typename TCompare, typename TOutput, bool Debug = false>
 static inline auto _partial_span_impl(
     const BioSeq &s1, const BioSeq &s2,
     const TCompare &compare,
@@ -62,16 +156,8 @@ static inline auto _partial_span_impl(
 ) -> Alignment {
     constexpr int PENALTY = 3;
 
-    constexpr auto MIN_DEVIATION = 1.0;
-    constexpr auto DEVIATION_SCALE = 3.0;
+    constexpr int N_REDUCE = 8;
     constexpr auto MIN_SLOPE = 0.8;
-
-    constexpr int PUSH_STARTUP = 100;
-    constexpr int PUSH_LOOKAFTER = 50;
-    constexpr int SCAN_LOOKAHEAD = 30;
-    constexpr int SCAN_LOOKAFTER = 50;
-    constexpr int SCAN_DEVIATION_THRESHOLD = 20;
-    constexpr int SCAN_MIN_SIZE = 32;
 
     int n = s1.size(), m = s2.size();
 
@@ -119,113 +205,57 @@ static inline auto _partial_span_impl(
         vs[j] = Vec2d(j, opt[j].l1);
     }
 
-    auto decomp = french_stick_decompose(vs, 3);
-    fprintf(stderr, "decomp.area = %.4lf\n", decomp.area);
-    fprintf(stderr, "decomp.start = ");
-    for (int i : decomp.start) {
-        fprintf(stderr, "%d ", i);
-    }
-    fprintf(stderr, "\n");
-
-    const char *colors[] = {"RGBColor[1,0,0,0.1]", "RGBColor[0,1,0,0.1]", "RGBColor[0,0,1,0.1]"};
-    printf("ListPlot[{");
-    for (int i = 0; i < decomp.start.size(); i++) {
-        int l = decomp.start[i];
-        int r = i + 1 < decomp.start.size() ? decomp.start[i + 1] : vs.size();
-
-        printf("Style[{");
-        for (int j = l; j < r; j++) {
-            printf("{%.3lf,%.3lf}", vs[j].x, vs[j].y);
-            if (j + 1 < r)
-                printf(",");
-        }
-        printf("},%s]\n", colors[i]);
-        if (i + 1 < decomp.start.size())
-            printf(",");
-    }
-    printf("},ImageSize->Full,PlotRange->All]\n");
+    auto decomp = decompose(vs);
 
     if (Debug) {
-        printf("Show[ListPlot[{");
-        for (int j = 1; j <= m; j++) {
-            printf("{%d,%d}", j, opt[j].l1);
-            if (j < m)
+        fprintf(stderr, "decomp.area = %.4lf\n", decomp.area);
+        fprintf(stderr, "decomp.slices = ");
+        for (auto &slice : decomp.slices) {
+            fprintf(stderr, "[%d, %d) ", slice.begin, slice.end);
+        }
+        fprintf(stderr, "\n");
+
+        const char *colors[] = {"RGBColor[1,0,0,0.1]", "RGBColor[0,1,0,0.1]", "RGBColor[0,0,1,0.1]"};
+        printf("ListPlot[{");
+        for (int i = 0; i < decomp.slices.size(); i++) {
+            auto &slice = decomp.slices[i];
+
+            printf("Style[{");
+            for (int j = slice.begin; j < slice.end; j++) {
+                printf("{%.3lf,%.3lf}", vs[j].x, vs[j].y);
+                if (j + 1 < slice.end)
+                    printf(",");
+            }
+            printf("},%s]\n", colors[i]);
+            if (i + 1 < decomp.slices.size())
                 printf(",");
         }
-        puts("},PlotRange->All]");
+
+        int last = decomp.slices.back().end;
+        if (last < m) {
+            printf(",Style[{");
+            for (int i = last; i < m; i++) {
+                printf("{%.3lf,%.3lf}", vs[i].x, vs[i].y);
+                if (i + 1 < m)
+                    printf(",");
+            }
+            printf("},RGBColor[0,0,0,0.1]]\n");
+        }
+
+        auto x = decomp.slices.size() > 1 ? decomp.slices[1].begin : m;
+        auto y = opt[x].l1;
+
+        printf(
+            "},Epilog->{Directive[Black],Line[{{0,%d},{%d,%d}}],Line[{{%d,0},{%d,%d}}]}",
+            y, x, y, x, x, y
+        );
+        printf(",ImageSize->Full,PlotRange->All]\n");
     }
 
-    auto deviation = [](const Vec2d &line, const Vec2d &point) {
-        auto y0 = line.k() * point.x + line.b();
-        return std::abs(point.y - y0);
-    };
-
-    int r = PUSH_STARTUP, last_r = 0;
-    Vec2d primary_line;
-    while (last_r != r) {
-        last_r = r;
-        primary_line = linear_least_square(vs.begin(), vs.begin() + r, 8);
-
-        auto max_dev = MIN_DEVIATION;
-        for (int i = 0; 2 * i < r; i++) {
-            max_dev = std::max(max_dev, deviation(primary_line, vs[i]));
-        }
-
-        if (Debug)
-            fprintf(stderr, "max_dev=%.4lf\n", max_dev);
-        max_dev *= DEVIATION_SCALE;
-
-        for (int i = std::min(m, r + PUSH_LOOKAFTER); i >= r; ) {
-            if (deviation(primary_line, vs[i]) < max_dev) {
-                r = i + 1;
-                i = std::min(m, r + PUSH_LOOKAFTER);
-            } else
-                i--;
-        }
-
-        if (Debug) {
-            printf(
-                ",Plot[Style[(%.16lf)x+(%.16lf),RGBColor[0,0,0,%.2lf]],{x,0,%d}]\n",
-                primary_line.k(), primary_line.b(), (r == last_r ? 1.0 : 0.2), m
-            );
-            fprintf(stderr, "r=%d\n", r);
-        }
-    }
-
-    std::vector<Vec2d> neighbors;
-
-    if (primary_line.k() > MIN_SLOPE) {
-        neighbors.reserve(SCAN_LOOKAFTER);
-        for (int i = std::max(0, r - SCAN_LOOKAHEAD); i <= m && i <= r + SCAN_LOOKAFTER; i++) {
-            if (std::abs(opt[r - 1].l1 - opt[i].l1) <= SCAN_DEVIATION_THRESHOLD)
-                neighbors.push_back(vs[i]);
-        }
-    }
-
-    if (Debug)
-        fprintf(stderr, "neighbors.size()=%zu\n", neighbors.size());
-
-    int corner = 0;
-    if (neighbors.size() > SCAN_MIN_SIZE) {
-        auto secondary_line = linear_least_square(neighbors.begin(), neighbors.end());
-        auto [x, y] = line_intersection(primary_line, secondary_line);
-
-        if (Debug) {
-            printf(
-                ",Plot[Style[(%.16lf)x+(%.16lf),Black],{x,0,%d}]\n",
-                secondary_line.k(), secondary_line.b(), m
-            );
-            printf(
-                ",Epilog->{Directive[RGBColor[1,0,0,0.5]],Line[{{0,%.16lf},{%d,%.16lf}}],Line[{{%.16lf,0},{%.16lf,%d}}]},ImageSize->Full]\n",
-                y, m, y, x, x, n
-            );
-        }
-
-        corner = std::max(0, std::min(m, static_cast<int>(std::round(x))));
-    } else {
-        if (Debug)
-            puts(",ImageSize->Full]");
-    }
+    int corner = decomp.slices[0].end;
+    if (decomp.slices.size() <= 1 ||
+        linear_least_square(vs.begin(), vs.begin() + corner, N_REDUCE).k() < MIN_SLOPE)
+        corner = 0;
 
     auto best = opt[corner];
     return output(best, best.l1, best.l2);

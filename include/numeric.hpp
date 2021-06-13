@@ -4,6 +4,8 @@
 
 #include <vector>
 
+#include "common.hpp"
+
 
 namespace core {
 
@@ -135,7 +137,7 @@ auto linear_least_square(TIterator beg, TIterator end, int n_reduce = 0) -> Vec2
 auto line_intersection(const Vec2d &l1, const Vec2d &l2) -> Vec2d;
 
 struct Decomposition {
-    std::vector<int> start;
+    std::vector<Range> slices;
     double area;
 };
 

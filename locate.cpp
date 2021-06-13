@@ -3,7 +3,7 @@
 #include "CLI11.hpp"
 
 #include "core.hpp"
-#include "rash/rash.hpp"
+#include "rash/pool.hpp"
 
 
 auto get_id(int i) -> std::string {
@@ -17,9 +17,9 @@ int main(int argc, char *argv[]) {
     std::string ref_path, runs_path;
 
     CLI::App args;
-    args.add_option("-r,--ref", ref_path)->required();
-    args.add_option("-l,--long", runs_path)->required();
-    args.add_option("-j,--jobs", n_workers);
+    args.add_option("-r", ref_path)->required();
+    args.add_option("-l", runs_path)->required();
+    args.add_option("-j", n_workers);
     CLI11_PARSE(args, argc, argv);
 
     core::Dict ref, runs;

@@ -71,4 +71,12 @@ private:
 
 using BioSeq = Slice<char, std::basic_string<char>>;
 
+struct Range {
+    int begin, end;
+
+    auto length() const -> int {
+        return end - begin;
+    }
+};
+
 }
