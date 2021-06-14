@@ -74,6 +74,71 @@ auto range_slope(TIterator beg, const TIterator &end) -> double {
         return (max_y - min_y) / std::max(0.1, max_x - min_x);
 }
 
+template <typename T, typename THeightFn>
+requires requires (T x, THeightFn fn) {
+    static_cast<int>(fn(x));
+}
+auto trim_outliers(const std::vector<T> &vs, const THeightFn &height) -> std::vector<bool> {
+    constexpr int INNER_THRESHOLD = 50;
+
+    int n = vs.size();
+
+    // x: index; y: corresponding height
+    std::vector<Vec2i> f, bucket;
+    f.resize(n);
+    bucket.push_back({-1, std::numeric_limits<int>::min()});
+
+    for (int i = 0; i < n; i++) {
+        int y = height(vs[i]);
+        int j = std::upper_bound(
+            bucket.begin(), bucket.end(), Vec2i{-1, y},
+            [](const Vec2i &u, const Vec2i &v) {
+                return u.y < v.y;
+            }
+        ) - bucket.begin();
+
+        f[i] = {bucket[j - 1].x, j};
+
+        if (j == bucket.size())
+            bucket.push_back({i, y});
+        else if (bucket[j].y >= y)
+            bucket[j] = {i, y};
+    }
+
+    std::vector<bool> mark;
+    mark.resize(n);
+
+    for (int i = bucket.back().x; i != -1; i = f[i].x) {
+        mark[i] = true;
+    }
+
+    std::vector<bool> new_mark;
+    new_mark.resize(n);
+
+    int last = -1;
+    for (int i = 0; i < n; i++) {
+        if (mark[i])
+            last = i;
+        else if (last != -1 && std::abs(height(vs[last]) - height(vs[i])) <= INNER_THRESHOLD)
+            new_mark[i] = true;
+    }
+
+    last = -1;
+    for (int i = n - 1; i >= 0; i--) {
+        if (mark[i])
+            last = i;
+        else if (last != -1 && std::abs(height(vs[last]) - height(vs[i])) <= INNER_THRESHOLD)
+            new_mark[i] = true;
+    }
+
+    for (int i = 0; i < n; i++) {
+        if (new_mark[i])
+            mark[i] = true;
+    }
+
+    return mark;
+}
+
 auto decompose(std::vector<Vec2d> vs) -> Decomposition {
     constexpr int MIN_SLICE_LEN = 45;
     constexpr auto MAX_SLOPE = 9.5;
@@ -199,13 +264,23 @@ static inline auto _partial_span_impl(
         }
     }
 
+    auto mark = trim_outliers(opt, [](const Record &u) {
+        return u.l1;
+    });
+
     std::vector<Vec2d> vs;
-    vs.resize(m + 1);
+    vs.reserve(m + 1);
     for (int j = 0; j <= m; j++) {
-        vs[j] = Vec2d(j, opt[j].l1);
+        if (mark[j])
+            vs.push_back(Vec2d(opt[j].l2, opt[j].l1));
     }
 
     auto decomp = decompose(vs);
+    int corner = int(vs[decomp.slices[0].end - 1].x + 0.5);
+    if (corner > m)
+        corner = m;
+    if (corner < 0)
+        corner = 0;
 
     if (Debug) {
         fprintf(stderr, "decomp.area = %.4lf\n", decomp.area);
@@ -222,7 +297,7 @@ static inline auto _partial_span_impl(
 
             printf("Style[{");
             for (int j = slice.begin; j < slice.end; j++) {
-                printf("{%.3lf,%.3lf}", vs[j].x, vs[j].y);
+                printf("{%.1lf,%.1lf}", vs[j].x, vs[j].y);
                 if (j + 1 < slice.end)
                     printf(",");
             }
@@ -232,18 +307,25 @@ static inline auto _partial_span_impl(
         }
 
         int last = decomp.slices.back().end;
-        if (last < m) {
+        if (last < vs.size()) {
             printf(",Style[{");
-            for (int i = last; i < m; i++) {
-                printf("{%.3lf,%.3lf}", vs[i].x, vs[i].y);
-                if (i + 1 < m)
+            for (int i = last; i < vs.size(); i++) {
+                printf("{%.1lf,%.1lf}", vs[i].x, vs[i].y);
+                if (i + 1 < vs.size())
                     printf(",");
             }
             printf("},RGBColor[0,0,0,0.1]]\n");
         }
 
-        auto x = decomp.slices.size() > 1 ? decomp.slices[1].begin : m;
-        auto y = opt[x].l1;
+        printf(",Style[{{0,0}");
+        for (int j = 0; j <= m; j++) {
+            if (!mark[j])
+                printf(",{%d,%d}", opt[j].l2, opt[j].l1);
+        }
+        printf("},Orange]\n");
+
+        int x = decomp.slices.size() > 1 ? opt[corner].l2 : m;
+        int y = opt[x].l1;
 
         printf(
             "},Epilog->{Directive[Black],Line[{{0,%d},{%d,%d}}],Line[{{%d,0},{%d,%d}}]}",
@@ -252,9 +334,9 @@ static inline auto _partial_span_impl(
         printf(",ImageSize->Full,PlotRange->All]\n");
     }
 
-    int corner = decomp.slices[0].end;
-    if (decomp.slices.size() <= 1 ||
-        linear_least_square(vs.begin(), vs.begin() + corner, N_REDUCE).k() < MIN_SLOPE)
+    auto slope = linear_least_square(vs.begin(), vs.begin() + decomp.slices[0].end, N_REDUCE).k();
+    // fprintf(stderr, "slope=%.4lf\n", slope);
+    if (decomp.slices.size() <= 1 || slope < MIN_SLOPE)
         corner = 0;
 
     auto best = opt[corner];
