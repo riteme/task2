@@ -76,6 +76,7 @@ int main(int argc, char *argv[]) {
     std::fstream fp(dump_file);
 
     std::unordered_map<Key, std::vector<core::Vec2d>> bucket;
+    std::unordered_map<std::string, std::vector<core::Vec2d>> invs;
     while (fp) {
         std::string data;
         std::getline(fp, data);
@@ -100,10 +101,43 @@ int main(int argc, char *argv[]) {
 
         auto rate = get<double>(stream);
         if (rate > 0.5)
-            fprintf(stderr, "INV %s %d %d %.3lf\n", name.data(), int(x1), int(x2), rate);
+            invs[name].push_back({x1, x2});
     }
 
     UnionFind set;
+    for (auto &[name, vs] : invs) {
+        int n = vs.size();
+        set.reset(n);
+
+        for (int i = 0; i < n; i++) {
+            for (int j = i + 1; j < n; j++) {
+                if ((vs[i] - vs[j]).len2() < 1e3)
+                    set.link(i, j);
+            }
+        }
+
+        std::vector<core::Vec2d> sum;
+        std::vector<int> count;
+        sum.resize(n);
+        count.resize(n);
+
+        for (int i = 0; i < n; i++) {
+            int r = set.root(i);
+            sum[r] = sum[r] + vs[i];
+            count[r]++;
+        }
+
+        for (int i = 0; i < n; i++) {
+            if (set.root(i) == i) {
+                auto avg = sum[i] / count[i];
+                fprintf(stderr,
+                    "INV %s %d %d\n", name.data(),
+                    int(std::round(avg.x)), int(std::round(avg.y))
+                );
+            }
+        }
+    }
+
     std::unordered_map<Key, std::vector<core::Vec2d>> endpoint;
     for (auto &[key, vs] : bucket) {
         int n = vs.size();
@@ -199,7 +233,7 @@ int main(int argc, char *argv[]) {
                 } else if (std::abs(lp.x - rp.x) < 1010) {
                     int l = lp.x, r = rp.x;
 
-                    if (std::abs(lp.y - rp.y) < 800) {
+                    if (std::abs(lp.y - rp.y) < 500) {
                         if (l < r)
                             fprintf(stderr, "DEL %s %d %d\n", ref.name.data(), l, r);
                         else
