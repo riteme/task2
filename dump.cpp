@@ -79,7 +79,8 @@ int main(int argc, char *argv[]) {
             if (100 < prefix.range2.length() && prefix.range2.length() < run.sequence.size() - 100) {
                 front = core::Vec2i(
                     info.left + prefix.range1.end - 1,
-                    info.left + prefix.range2.end - 1
+                    info.left + static_cast<core::i64>(info.right - info.left)
+                        * (prefix.range2.end - 1) / run.sequence.size()
                 );
             } else
                 contained = false;
@@ -87,7 +88,8 @@ int main(int argc, char *argv[]) {
             if (100 < suffix.range2.length() && suffix.range2.length() < run.sequence.size() - 100) {
                 back = core::Vec2i(
                     info.left + suffix.range1.begin - 2,
-                    info.left + suffix.range2.begin - 2
+                    info.left + static_cast<core::i64>(info.right - info.left)
+                        * (suffix.range2.begin - 1) / run.sequence.size()
                 );
             } else
                 contained = false;

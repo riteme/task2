@@ -77,6 +77,10 @@ struct Vec2 {
     auto operator%(const Vec2 &rhs) const -> T {
         return x * rhs.y - y * rhs.x;
     }
+
+    bool operator<(const Vec2 &rhs) const {
+        return x == rhs.x ? y < rhs.y : x < rhs.x;
+    }
 };
 
 using Vec2i = Vec2<int>;

@@ -30,6 +30,7 @@ add_executable(align align.cpp)
 add_executable(locate locate.cpp)
 add_executable(locate-demo locate-demo.cpp)
 add_executable(dump dump.cpp)
+add_executable(aggregate aggregate.cpp)
 
 set(cxx_options
     -Wall
@@ -48,3 +49,4 @@ target_link_libraries(align core)
 target_link_libraries(locate core rash pthread)
 target_link_libraries(locate-demo core rash imgui nanovg OpenGL GLEW SDL2 pthread)
 target_link_libraries(dump core rash pthread)
+target_link_libraries(aggregate core)

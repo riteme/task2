@@ -19,9 +19,7 @@ constexpr int H_VALUE = 5;
 struct Key {
     int x = 1, y = 0;
 
-    bool operator==(const Key &rhs) const {
-        return x == rhs.x && y == rhs.y;
-    }
+    bool operator==(const Key &rhs) const = default;
 
     bool operator<(const Key &rhs) const {
         return std::tie(x, y) < std::tie(rhs.x, rhs.y);
@@ -53,16 +51,12 @@ void update(T &dest, const T &value) {
 
 }
 
-namespace std {
-
 template <>
-struct hash<Key> {
+struct std::hash<Key> {
     auto operator()(const Key &z) const -> size_t {
         return ((z.x << 15) ^ z.y) * 0x19260817;
     }
 };
-
-}
 
 namespace core {
 
