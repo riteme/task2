@@ -30,6 +30,7 @@ constexpr int CMAP[256] = {
 struct Alignment {
     Range range1, range2;
     int loss;
+    bool mark;
 
     auto length1() const -> int {
         return range1.length();

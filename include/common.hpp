@@ -20,12 +20,12 @@ auto watson_crick_complement(const std::string &s) -> std::string;
 template <typename T, typename TContainer>
 class Slice {
 public:
-    TContainer &internal;
+    TContainer *internal;
 
     Slice(TContainer &_internal)
-        : internal(_internal), m_begin(_internal.begin()), m_end(_internal.end()) {}
+        : internal(&_internal), m_begin(_internal.begin()), m_end(_internal.end()) {}
     Slice(TContainer &_internal, int begin, int end)
-        : internal(_internal),
+        : internal(&_internal),
           m_begin(_internal.begin() + (begin - 1)),
           m_end(_internal.begin() + (end - 1)) {}
 
@@ -61,11 +61,15 @@ public:
         return {internal, m_begin + (begin - 1), m_begin + (end - 1)};
     }
 
+    auto clone() const -> TContainer {
+        return TContainer(begin(), end());
+    }
+
 private:
-    using Iterator = decltype(internal.begin());
+    using Iterator = decltype(internal->begin());
     Iterator m_begin, m_end;
 
-    Slice(TContainer &_internal, Iterator _begin, Iterator _end)
+    Slice(TContainer *_internal, Iterator _begin, Iterator _end)
         : internal(_internal), m_begin(_begin), m_end(_end) {}
 };
 

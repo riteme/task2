@@ -4,6 +4,8 @@
 #include "rash/pool.hpp"
 
 
+constexpr int LOCATOR_LENGTH = 100;
+
 struct MetaInfo {
     std::string name;
     std::string target;
@@ -71,22 +73,45 @@ int main(int argc, char *argv[]) {
             auto t = core::BioSeq(run.sequence);
 
             auto prefix = core::prefix_span(s, t);
+            if (prefix.mark) {
+                s = core::BioSeq(ref.sequence,
+                    std::max(1UL, info.right - run.sequence.size() + 1),
+                    info.right + 1
+                );
+
+                printf("warn: triggered prefix correlation.\n");
+                prefix = core::prefix_span(s, t);
+            }
+
             auto suffix = core::suffix_span(s, t);
+            if (suffix.mark) {
+                s = core::BioSeq(ref.sequence,
+                    info.left,
+                    std::min(ref.sequence.size(), info.left + run.sequence.size())
+                );
+
+                printf("warn: triggered suffix correlation.\n");
+                suffix = core::suffix_span(s, t);
+            }
 
             bool contained = true;
             core::Vec2i front, back;
 
-            if (100 < prefix.range2.length() && prefix.range2.length() < run.sequence.size() - 100) {
+            int left = s.begin() - ref.sequence.begin() + 1;
+
+            if (prefix.range2.length() > LOCATOR_LENGTH &&
+                prefix.range2.length() < run.sequence.size() - LOCATOR_LENGTH) {
                 front = core::Vec2i(
-                    info.left + prefix.range1.end - 1,
+                    /*info.left*/ left + prefix.range1.end - 1,
                     prefix.range2.end - 1
                 );
             } else
                 contained = false;
 
-            if (100 < suffix.range2.length() && suffix.range2.length() < run.sequence.size() - 100) {
+            if (suffix.range2.length() > LOCATOR_LENGTH &&
+                suffix.range2.length() < run.sequence.size() - LOCATOR_LENGTH) {
                 back = core::Vec2i(
-                    info.left + suffix.range1.begin - 2,
+                    /*info.left*/ left + suffix.range1.begin - 2,
                     suffix.range2.begin
                 );
             } else
@@ -128,8 +153,8 @@ int main(int argc, char *argv[]) {
                 "%s %s %d %d %d %d %d %d %.16lf\n",
                 run.name.data(),
                 ref.name.data(),
-                front.x, front.y, dist1,
-                back.x, back.y, dist2,
+                front.x, front.y, std::abs(dist1),
+                back.x, back.y, std::abs(dist2),
                 inv_match_rate
             );
         });

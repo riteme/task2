@@ -1,3 +1,5 @@
+#include <tuple>
+
 #include "index.hpp"
 #include "numeric.hpp"
 
@@ -7,6 +9,7 @@ namespace {
 using namespace core;
 
 constexpr int INF = 0x3f3f3f3f;
+constexpr auto MIN_SLOPE = 0.8;
 
 struct Record {
     int t, l1, l2;
@@ -147,10 +150,23 @@ auto decompose(std::vector<Vec2d> vs) -> Decomposition {
 
     int K = 3;
 
+    int offset = 0;
     Decomposition result;
     while (K > 0) {
         auto last_size = vs.size();
         result = french_stick_decompose(vs, K);
+
+        // // experimental: head trim
+        // if (result.slices.size() > 1) {
+        //     auto &slice = result.slices[0];
+        //     auto slope = range_slope(vs.begin(), vs.begin() + slice.end);
+        //     fprintf(stderr, "slope=%.4lf\n", slope);
+        //     if (slope < MIN_SLOPE) {
+        //         offset = slice.end;
+        //         vs.erase(vs.begin(), vs.begin() + offset);
+        //         continue;
+        //     }
+        // }
 
         int fail_count = 0;
         for (auto &slice : result.slices) {
@@ -206,6 +222,11 @@ auto decompose(std::vector<Vec2d> vs) -> Decomposition {
         K -= fail_count;
     }
 
+    for (auto &slice : result.slices) {
+        slice.begin += offset;
+        slice.end += offset;
+    }
+
     return result;
 }
 
@@ -213,16 +234,22 @@ auto decompose(std::vector<Vec2d> vs) -> Decomposition {
 
 namespace core {
 
-template <typename TCompare, typename TOutput, bool Debug = false>
+template <
+    typename TFactory,
+    bool Debug = false
+>
 static inline auto _partial_span_impl(
     const BioSeq &s1, const BioSeq &s2,
-    const TCompare &compare,
-    const TOutput &output
+    const TFactory &factory,
+    int offset = 0,
+    bool enable_correlation = true
 ) -> Alignment {
     constexpr int PENALTY = 3;
-
     constexpr int N_REDUCE = 8;
-    constexpr auto MIN_SLOPE = 0.8;
+    constexpr int OFFSET_THRESHOLD = 10;
+    constexpr int LOCATOR_LENGTH = 100;
+
+    auto output = factory(offset);
 
     int n = s1.size(), m = s2.size();
 
@@ -243,15 +270,15 @@ static inline auto _partial_span_impl(
             update(f[1][j], f[0][j] + Record{1 + PENALTY, 1, 0});
 
             f[0][j] = Record::max();
-            if (compare(i, j)) {
+            if (s1[offset + i] == s2[j]) {
                 update(f[0][j], f[0][j - 1] + Record{0, 1, 1});
                 update(f[0][j], f[1][j - 1] + Record{0, 1, 1});
             }
         }
 
-        f[0][0] = Record::max();
         f[1][0] = f[1][0] + Record{1, 1, 0};
         update(f[1][0], f[0][0] + Record{1 + PENALTY, 1, 0});
+        f[0][0] = Record::max();
 
         for (int j = 1; j <= m; j++) {
             update(f[1][j], f[1][j - 1] + Record{1, 0, 1});
@@ -336,43 +363,64 @@ static inline auto _partial_span_impl(
 
     auto slope = linear_least_square(vs.begin(), vs.begin() + decomp.slices[0].end, N_REDUCE).k();
     // fprintf(stderr, "slope=%.4lf\n", slope);
-    if (decomp.slices.size() <= 1 || slope < MIN_SLOPE)
+    bool slope_notify = slope < MIN_SLOPE;
+
+    if (decomp.slices.size() <= 1 || slope_notify) {
+        if (slope_notify && enable_correlation) {
+            auto alignment = local_align(
+                s1, s2.take(1, std::min(s2.size(), LOCATOR_LENGTH) + 1)
+            );
+
+            int offset = alignment.range1.begin;
+            printf("warn: triggered correlation: offset=%d\n", offset);
+
+            if (offset > OFFSET_THRESHOLD)
+                return _partial_span_impl(s1, s2, factory, offset, false);
+        }
+
         corner = 0;
+    }
 
     auto best = opt[corner];
-    return output(best, best.l1, best.l2);
+    auto result = output(best, best.l1, best.l2);
+    result.mark = slope_notify;
+    return result;
 }
 
 auto prefix_span(const BioSeq &s1, const BioSeq &s2) -> Alignment {
     return _partial_span_impl(
         s1, s2,
-        [&](int i, int j) {
-            return s1[i] == s2[j];
-        },
-        [&](const Record &opt, int i, int j) {
-            Alignment result;
-            result.range1 = {1, i + 1};
-            result.range2 = {1, j + 1};
-            result.loss = opt.t;
-            return result;
+        [&](int offset) {
+            return [&, offset](const Record &opt, int i, int j) {
+                Alignment result;
+                result.range1 = {1, offset + i + 1};
+                result.range2 = {1, j + 1};
+                result.loss = opt.t;
+                return result;
+            };
         }
     );
 }
 
-auto suffix_span(const BioSeq &s1, const BioSeq &s2) -> Alignment {
-    int n = s1.size(), m = s2.size();
+auto suffix_span(const BioSeq &_s1, const BioSeq &_s2) -> Alignment {
+    int n = _s1.size(), m = _s2.size();
+
+    auto c1 = _s1.clone(), c2 = _s2.clone();
+    std::reverse(c1.begin(), c1.end());
+    std::reverse(c2.begin(), c2.end());
+
+    auto s1 = BioSeq(c1), s2 = BioSeq(c2);
 
     return _partial_span_impl(
         s1, s2,
-        [&](int i, int j) {
-            return s1[n - i + 1] == s2[m - j + 1];
-        },
-        [&](const Record &opt, int i, int j) {
-            Alignment result;
-            result.range1 = {n - i + 1, n + 1};
-            result.range2 = {m - j + 1, m + 1};
-            result.loss = opt.t;
-            return result;
+        [&](int offset) {
+            return [&, offset](const Record &opt, int i, int j) {
+                Alignment result;
+                result.range1 = {n - offset - i + 1, n + 1};
+                result.range2 = {m - j + 1, m + 1};
+                result.loss = opt.t;
+                return result;
+            };
         }
     );
 }

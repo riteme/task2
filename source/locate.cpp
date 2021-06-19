@@ -21,7 +21,7 @@ namespace core {
 auto Index::fuzzy_locate(const BioSeq &seq) const -> Location {
     int n = seq.size();
 
-    std::string rev_seq = watson_crick_complement(seq.internal);
+    std::string rev_seq = watson_crick_complement(*seq.internal);
     BioSeq s[NUM_SEQ] = {seq, rev_seq};
 
     int bucket_size = std::max(MIN_BUCKET_SIZE, n / 2);
