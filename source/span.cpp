@@ -249,9 +249,9 @@ static inline auto _partial_span_impl(
             }
         }
 
-        f[0][0] = Record::max();
         f[1][0] = f[1][0] + Record{1, 1, 0};
         update(f[1][0], f[0][0] + Record{1 + PENALTY, 1, 0});
+        f[0][0] = Record::max();
 
         for (int j = 1; j <= m; j++) {
             update(f[1][j], f[1][j - 1] + Record{1, 0, 1});

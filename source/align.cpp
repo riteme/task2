@@ -87,15 +87,18 @@ auto full_align(const BioSeq &s1, const BioSeq &s2) -> int {
 }
 
 auto local_align(const BioSeq &s1, const BioSeq &s2) -> Alignment {
+    constexpr int PENALTY = 3;
+
     struct Value {
-        int t, d;
+        // d: (length in s1) - (length in s2) => n - m
+        int t, d, loss;
 
         static auto zero() -> Value {
-            return {0, 0};
+            return {0, 0, 0};
         }
 
         static auto max() -> Value {
-            return {INF, INF};
+            return {INF, INF, INF};
         }
 
         bool operator<(const Value &rhs) const {
@@ -103,35 +106,49 @@ auto local_align(const BioSeq &s1, const BioSeq &s2) -> Alignment {
         }
 
         auto operator+(const Value &rhs) const -> Value {
-            return {t + rhs.t, d + rhs.d};
+            return {t + rhs.t, d + rhs.d, loss + rhs.loss};
         }
     };
 
     int n = s1.size(), m = s2.size();
-    std::vector<Value> f;
 
-    f.resize(m + 1);
-    for (int j = 0; j <= m; j++) {
-        f[j] = {j, -j};
+    std::vector<Value> f[2];
+    for (int i = 0; i < 2; i++) {
+        f[i].resize(m + 1);
+        for (int j = 0; j <= m; j++) {
+            f[i][j] = {j, -j, j};
+        }
     }
 
     auto opt = Value::max();
     int opt_i = 0;
     for (int i = 1; i <= n; i++) {
         for (int j = m; j > 0; j--) {
-            f[j] = f[j] + Value{1, +1};
-            if (s1[i] == s2[j])
-                update(f[j], f[j - 1] + Value{0, +0});
+            f[1][j] = f[1][j] + Value{1, +1, 1};
+            update(f[1][j], f[0][j] + Value{1 + PENALTY, +1, 1});
+
+            f[0][j] = Value::max();
+            if (s1[i] == s2[j]) {
+                update(f[0][j], f[0][j - 1] + Value{0, +0, 0});
+                update(f[0][j], f[1][j - 1] + Value{0, +0, 0});
+            }
         }
 
-        update(f[0], {0, 0});
+        f[1][0] = f[1][0] + Value{1, +1, 1};
+        update(f[1][0], f[0][0] + Value{1 + PENALTY, +1, 1});
+        f[0][0] = {0, 0, 0};
 
         for (int j = 1; j <= m; j++) {
-            update(f[j], f[j - 1] + Value{1, -1});
+            update(f[1][j], f[1][j - 1] + Value{1, -1, 1});
+            update(f[1][j], f[0][j - 1] + Value{1 + PENALTY, -1, 1});
         }
 
-        if (f[m] < opt) {
-            opt = f[m];
+        if (f[0][m] < opt) {
+            opt = f[0][m];
+            opt_i = i;
+        }
+        if (f[1][m] < opt) {
+            opt = f[1][m];
             opt_i = i;
         }
     }
@@ -140,7 +157,7 @@ auto local_align(const BioSeq &s1, const BioSeq &s2) -> Alignment {
     int len = m + opt.d;
     result.range1 = {opt_i - len + 1, opt_i + 1};
     result.range2 = {1, m + 1};
-    result.loss = opt.t;
+    result.loss = opt.loss;
 
     return result;
 }

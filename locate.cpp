@@ -14,12 +14,13 @@ auto get_id(int i) -> std::string {
 
 int main(int argc, char *argv[]) {
     int n_workers = 1;
-    std::string ref_path, runs_path;
+    std::string ref_path, runs_path, target;
 
     CLI::App args;
     args.add_option("-r", ref_path)->required();
     args.add_option("-l", runs_path)->required();
     args.add_option("-j", n_workers);
+    args.add_option("-t", target);
     CLI11_PARSE(args, argc, argv);
 
     core::Dict ref, runs;
@@ -43,6 +44,8 @@ int main(int argc, char *argv[]) {
         std::vector<std::future<void>> futures;
         for (int j = 0; j < runs.size(); j++) {
             if (!core::startswith(runs[j].name, idx))
+                continue;
+            if (!target.empty() && runs[j].name != target)
                 continue;
 
             auto future = pool.run([&ref, &runs, &index, i, j] {
