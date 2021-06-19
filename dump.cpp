@@ -79,8 +79,7 @@ int main(int argc, char *argv[]) {
             if (100 < prefix.range2.length() && prefix.range2.length() < run.sequence.size() - 100) {
                 front = core::Vec2i(
                     info.left + prefix.range1.end - 1,
-                    info.left + static_cast<core::i64>(info.right - info.left)
-                        * (prefix.range2.end - 1) / run.sequence.size()
+                    prefix.range2.end - 1
                 );
             } else
                 contained = false;
@@ -88,15 +87,14 @@ int main(int argc, char *argv[]) {
             if (100 < suffix.range2.length() && suffix.range2.length() < run.sequence.size() - 100) {
                 back = core::Vec2i(
                     info.left + suffix.range1.begin - 2,
-                    info.left + static_cast<core::i64>(info.right - info.left)
-                        * (suffix.range2.begin - 1) / run.sequence.size()
+                    suffix.range2.begin
                 );
             } else
                 contained = false;
 
             auto inv_match_rate = -1.0;
             int l1 = front.x, r1 = back.x;
-            int l2 = prefix.range2.end, r2 = suffix.range2.begin - 1;
+            int l2 = front.y + 1, r2 = back.y - 1;
             if (contained && 0 < l1 && l1 <= r1 && 0 < l2 && l2 <= r2) {
                 auto reversed = core::watson_crick_complement(
                     run.sequence.substr(l2 - 1, r2 - l2 + 1)
@@ -123,12 +121,15 @@ int main(int argc, char *argv[]) {
                 suffix.range2.begin, suffix.range2.end,
                 suffix.loss
             );
+
+            int dist1 = front.y > 0 ? ((back.y > 0 ? back.y : run.sequence.size()) - front.y) : 0;
+            int dist2 = back.y > 0 ? (back.y - front.y) : 0;
             fprintf(stderr,
-                "%s %s %d %d %d %d %.16lf\n",
+                "%s %s %d %d %d %d %d %d %.16lf\n",
                 run.name.data(),
                 ref.name.data(),
-                front.x, front.y,
-                back.x, back.y,
+                front.x, front.y, dist1,
+                back.x, back.y, dist2,
                 inv_match_rate
             );
         });

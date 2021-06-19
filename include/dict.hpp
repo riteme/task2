@@ -2,6 +2,7 @@
 
 #include <vector>
 #include <string>
+#include <unordered_map>
 
 
 namespace core {
@@ -25,7 +26,8 @@ class Dict {
 public:
     void load_file(const std::string &path);
     void sort_by_name();
-    auto find(const std::string &name) -> DictEntry *;
+    void build_index();
+    auto find(const std::string &name) const -> DictEntry *;
 
     auto &operator[](size_t i) {
         return _entries[i];
@@ -56,7 +58,10 @@ public:
     }
 
 private:
-    std::vector<DictEntry> _entries;
+    auto _find_impl(const std::string &name) -> DictEntry *;
+
+    mutable std::vector<DictEntry> _entries;
+    std::unordered_map<std::string, DictEntry *> _index;
 };
 
 }

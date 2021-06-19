@@ -39,6 +39,7 @@ namespace core {
 
 void Dict::load_file(const std::string &path) {
     _entries.clear();
+    _index.clear();
 
     std::fstream fp(path);
     while (fp) {
@@ -72,12 +73,28 @@ void Dict::sort_by_name() {
     );
 }
 
-auto Dict::find(const std::string &name) -> DictEntry * {
+void Dict::build_index() {
+    _index.clear();
     for (auto &e : _entries) {
-        if (e.name == name)
-            return &e;
+        _index[e.name] = &e;
     }
-    abort();
+}
+
+auto Dict::find(const std::string &name) const -> DictEntry * {
+    if (_index.empty()) {
+        for (auto &e : _entries) {
+            if (e.name == name)
+                return &e;
+        }
+
+        return nullptr;
+    } else {
+        auto it = _index.find(name);
+        if (it == _index.end())
+            return nullptr;
+        else
+            return it->second;
+    }
 }
 
 }

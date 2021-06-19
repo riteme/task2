@@ -207,8 +207,8 @@ int main(int argc, char *argv[]) {
 
         std::sort(ps.begin(), ps.end());
         for (auto [fx, fy] : ps) {
-            int x = std::round(fx);
-            int y = std::round(fy);
+            // int x = std::round(fx);
+            // int y = std::round(fy);
 
             // printf(
             //     "%s %s %d %d\n",
