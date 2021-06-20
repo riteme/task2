@@ -9,6 +9,18 @@ project(task2)
 set(CMAKE_BUILD_TYPE RelWithDebInfo)
 set(CMAKE_INTERPROCEDURAL_OPTIMIZATION True)
 
+include(CheckCXXCompilerFlag)
+
+CHECK_CXX_COMPILER_FLAG("-march=native" COMPILER_SUPPORTS_MARCH_NATIVE)
+if(COMPILER_SUPPORTS_MARCH_NATIVE)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=native")
+endif()
+
+CHECK_CXX_COMPILER_FLAG("-mtune=native" COMPILER_SUPPORTS_MTUNE_NATIVE)
+if(COMPILER_SUPPORTS_MTUNE_NATIVE)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mtune=native")
+endif()
+
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 set(CMAKE_EXPORT_COMPILE_COMMANDS True)
@@ -34,6 +46,7 @@ add_executable(locate-demo locate-demo.cpp)
 add_executable(dump dump.cpp)
 add_executable(aggregate aggregate.cpp)
 add_executable(analyze analyze.cpp)
+add_executable(query query.cpp)
 
 set(cxx_options
     -Wall
@@ -49,6 +62,7 @@ target_compile_options(locate-demo PRIVATE ${cxx_options})
 target_compile_options(dump PRIVATE ${cxx_options})
 target_compile_options(aggregate PRIVATE ${cxx_options})
 target_compile_options(analyze PRIVATE ${cxx_options})
+target_compile_options(query PRIVATE ${cxx_options})
 
 target_link_libraries(align core)
 target_link_libraries(locate core rash pthread)

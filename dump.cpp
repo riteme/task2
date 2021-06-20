@@ -4,7 +4,7 @@
 #include "rash/pool.hpp"
 
 
-constexpr int LOCATOR_LENGTH = 100;
+constexpr int START_LENGTH_THRESHOLD = 65;
 
 struct MetaInfo {
     std::string name;
@@ -99,8 +99,8 @@ int main(int argc, char *argv[]) {
 
             int left = s.begin() - ref.sequence.begin() + 1;
 
-            if (prefix.range2.length() > LOCATOR_LENGTH &&
-                prefix.range2.length() < run.sequence.size() - LOCATOR_LENGTH) {
+            if (prefix.range2.length() > START_LENGTH_THRESHOLD &&
+                prefix.range2.length() < run.sequence.size() - START_LENGTH_THRESHOLD) {
                 front = core::Vec2i(
                     /*info.left*/ left + prefix.range1.end - 1,
                     prefix.range2.end - 1
@@ -108,8 +108,8 @@ int main(int argc, char *argv[]) {
             } else
                 contained = false;
 
-            if (suffix.range2.length() > LOCATOR_LENGTH &&
-                suffix.range2.length() < run.sequence.size() - LOCATOR_LENGTH) {
+            if (suffix.range2.length() > START_LENGTH_THRESHOLD &&
+                suffix.range2.length() < run.sequence.size() - START_LENGTH_THRESHOLD) {
                 back = core::Vec2i(
                     /*info.left*/ left + suffix.range1.begin - 2,
                     suffix.range2.begin
