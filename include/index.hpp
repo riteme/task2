@@ -47,6 +47,14 @@ struct Alignment {
     auto rate2() const -> double {
         return double(loss) / length2();
     }
+
+    auto match_rate1() const -> double {
+        return 1 - rate1();
+    }
+
+    auto match_rate2() const -> double {
+        return 1 - rate2();
+    }
 };
 
 auto full_align(const BioSeq &s1, const BioSeq &s2) -> int;

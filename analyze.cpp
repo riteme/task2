@@ -2,6 +2,7 @@
 #include <sstream>
 #include <fstream>
 #include <functional>
+#include <unordered_set>
 #include <unordered_map>
 
 #include "CLI11.hpp"
@@ -18,6 +19,10 @@ constexpr auto INV_MIN_SCORE = 0.65;
 constexpr int MAX_CONJECTION_LENGTH = 150;
 constexpr auto MIN_CONJECTION_MATCH_RATE = 0.6;
 constexpr auto MAX_TRA_DISCREPANCY = 20.0;
+constexpr int LOCATOR_LENGTH = 100;
+constexpr int EXTRA_LOCATOR_LENGTH = 256;
+constexpr int SCAN_LENGTH = 1800;
+constexpr auto LOCATOR_MIN_MATCH_RATE = 0.75;
 
 // link type
 enum class LType : int {
@@ -352,12 +357,6 @@ int main(int argc, char *argv[]) {
         }
     };
 
-    auto maximize = [](int &maxlen, const ERefList &es) {
-        for (auto &ep : es) {
-            maxlen = std::max(maxlen, ep->len);
-        }
-    };
-
     auto dump_normal = [&](
         const char *op,
         const std::string &name,
@@ -390,10 +389,29 @@ int main(int argc, char *argv[]) {
         accumulate(sum, count, R);
         int left = std::round(sum / count);
 
-        int maxlen1 = 0, maxlen2 = 0;
-        maximize(maxlen1, L);
-        maximize(maxlen2, R);
-        int right = left + (maxlen1 + maxlen2) / 2;
+        sum = 0.0;
+        count = 0;
+        std::unordered_set<std::string> mark;
+
+        for (auto &ep : L) {
+            if (ep->len > MAX_SV_LENGTH)
+                continue;
+
+            sum += ep->len;
+            count++;
+            mark.insert(ep->name);
+        }
+
+        for (auto &ep : R) {
+            if (ep->len > MAX_SV_LENGTH)
+                continue;
+
+            int scale = mark.count(ep->name) ? 4 : 1;
+            sum += ep->len * scale;
+            count += scale;
+        }
+
+        int right = left + std::round(sum / count);
 
         fprintf(stderr, "%s %s %d %d\n", op, name.data(), left, right);
     };
@@ -412,14 +430,38 @@ int main(int argc, char *argv[]) {
         }
     };
 
-    using PosList = std::vector<double>;
+    dump(LType::INV, dump_normal);
+    dump(LType::DEL, dump_normal);
+    dump(LType::DUP, dump_normal);
+    dump(LType::INS, dump_ins);
+
+    /**
+     * naïve TRA pairing & dumping.
+     */
+
+    struct Position {
+        double pos;
+        bool marked = false;
+
+        void mark() {
+            marked = true;
+        }
+
+        auto to_int() const -> int {
+            return static_cast<int>(std::round(pos));
+        }
+    };
+
+    using PosList = std::vector<Position>;
+    using PosMap = std::unordered_map<Key, PosList>;
 
     auto compact = [&] {
-        std::unordered_map<Key, PosList> pmap;
+        PosMap pmap;
 
         for (auto &[key, es] : emap) {
-            auto &list = pmap[key];
+            auto &compacted = pmap[key];
 
+            std::vector<double> list;
             list.reserve(es.size());
             for (auto &ep : es) {
                 list.push_back(ep.pos1);
@@ -427,7 +469,6 @@ int main(int argc, char *argv[]) {
 
             std::sort(list.begin(), list.end());
 
-            PosList compacted;
             for (auto i = list.begin(); i != list.end(); ) {
                 auto j = i, k = std::next(i);
                 while (k != list.end() && std::abs(*j - *k) <= SNAP_DISTANCE) {
@@ -440,37 +481,38 @@ int main(int argc, char *argv[]) {
                     sum += *p;
                 }
 
-                compacted.push_back(sum / (k - i));
+                compacted.push_back({sum / (k - i), false});
 
                 i = k;
             }
-
-            list = std::move(compacted);
         }
 
         return pmap;
     };
 
-    auto dump_tra = [&] {
-        auto pmap = compact();
-
+    auto dump_tra = [&](PosMap &pmap) {
         for (auto &e1 : refs)
-        for (auto l1 : pmap[{e1.name, EType::LEFT}])
-        for (auto r1 : pmap[{e1.name, EType::RIGHT}]) {
-            auto len1 = r1 - l1;
+        for (auto &l1 : pmap[{e1.name, EType::LEFT}])
+        for (auto &r1 : pmap[{e1.name, EType::RIGHT}]) {
+            auto len1 = r1.pos - l1.pos;
             if (len1 < MIN_SV_LENGTH || len1 > MAX_SV_LENGTH)
                 continue;
 
             for (auto &e2 : refs) if (e2.name > e1.name)
-            for (auto l2 : pmap[{e2.name, EType::LEFT}])
-            for (auto r2 : pmap[{e2.name, EType::RIGHT}]) {
-                auto len2 = r2 - l2;
+            for (auto &l2 : pmap[{e2.name, EType::LEFT}])
+            for (auto &r2 : pmap[{e2.name, EType::RIGHT}]) {
+                auto len2 = r2.pos - l2.pos;
                 if (len2 < MIN_SV_LENGTH || len2 > MAX_SV_LENGTH)
                     continue;
 
                 if (std::abs(len1 - len2) <= MAX_TRA_DISCREPANCY) {
-                    int left1 = std::round(l1), right1 = std::round(r1);
-                    int left2 = std::round(l2), right2 = std::round(r2);
+                    int left1 = l1.to_int(), right1 = r1.to_int();
+                    int left2 = l2.to_int(), right2 = r2.to_int();
+
+                    l1.marked = true;
+                    l2.marked = true;
+                    r1.marked = true;
+                    r2.marked = true;
 
                     fprintf(stderr,
                         "TRA %s %d %d %s %d %d\n",
@@ -482,12 +524,116 @@ int main(int argc, char *argv[]) {
         }
     };
 
-    dump(LType::INV, dump_normal);
-    dump(LType::DEL, dump_normal);
-    dump(LType::DUP, dump_normal);
-    dump(LType::INS, dump_ins);
+    auto pmap = compact();
+    dump_tra(pmap);
 
-    dump_tra();
+    /**
+     * extra dumping.
+     */
+
+    auto dump_extra_del_and_dup = [&] {
+        for (auto &e : refs) {
+            for (auto &lp : emap[{e.name, EType::LEFT}]) {
+                auto &run = *runs.find(lp.name);
+                if (!lp.empty() || lp.pos2 >= run.sequence.size() - LOCATOR_LENGTH)
+                    continue;
+
+                int len = std::min(EXTRA_LOCATOR_LENGTH, int(run.sequence.size()) - lp.pos2);
+                auto t = core::BioSeq(run.sequence, lp.pos2 + 1, lp.pos2 + len);
+
+                // DEL
+                int right = std::min(int(e.sequence.size()), lp.pos1 + SCAN_LENGTH);
+                auto s = core::BioSeq(e.sequence, lp.pos1 + 1, right);
+
+                auto result = core::local_align(s, t);
+                int pos = lp.pos1 + result.range1.begin;
+
+                if (result.match_rate2() > LOCATOR_MIN_MATCH_RATE &&
+                    std::abs(pos - lp.pos1) > MIN_SV_LENGTH) {
+                    fprintf(stderr,
+                        "DEL %s %d %d\n",
+                        e.name.data(), lp.pos1, pos
+                    );
+                }
+
+                // DUP
+                int left = std::max(1, lp.pos1 - SCAN_LENGTH);
+                s = core::BioSeq(e.sequence, left, lp.pos1);
+
+                result = core::local_align(s, t);
+                pos = left + result.range1.begin;
+
+                if (result.match_rate2() > LOCATOR_MIN_MATCH_RATE &&
+                    std::abs(pos - lp.pos1) > MIN_SV_LENGTH) {
+                    fprintf(stderr,
+                        "DUP %s %d %d\n",
+                        e.name.data(), pos, lp.pos1
+                    );
+                }
+            }
+
+            for (auto &rp : emap[{e.name, EType::RIGHT}]) {
+                if (!rp.empty() || rp.pos2 <= LOCATOR_LENGTH)
+                    continue;
+
+                auto &run = *runs.find(rp.name);
+                int len = std::min(EXTRA_LOCATOR_LENGTH, rp.pos2 - 1);
+                auto t = core::BioSeq(run.sequence, rp.pos2 - len, rp.pos2);
+
+                // DEL
+                int left = std::max(1, rp.pos1 - SCAN_LENGTH);
+                auto s = core::BioSeq(e.sequence, left, rp.pos1);
+
+                auto result = core::local_align(s, t);
+                int pos = left + result.range1.end;
+
+                if (result.match_rate2() > LOCATOR_MIN_MATCH_RATE &&
+                    std::abs(rp.pos1 - pos) > MIN_SV_LENGTH) {
+                    fprintf(stderr,
+                        "DEL %s %d %d\n",
+                        e.name.data(), pos, rp.pos1
+                    );
+                }
+
+                // DUP
+                int right = std::min(int(e.sequence.size()), rp.pos1 + SCAN_LENGTH);
+                s = core::BioSeq(e.sequence, rp.pos1 + 1, right);
+
+                result = core::local_align(s, t);
+                pos = rp.pos1 + result.range1.end;
+
+                if (result.match_rate2() > LOCATOR_MIN_MATCH_RATE &&
+                    std::abs(rp.pos1 - pos) > MIN_SV_LENGTH) {
+                    fprintf(stderr,
+                        "DUP %s %d %d\n",
+                        e.name.data(), rp.pos1, pos
+                    );
+                }
+            }
+        }
+    };
+
+    auto dump_extra_inv = [&]() {
+        for (auto &e : refs)
+        for (auto &l : pmap[{e.name, EType::LEFT}])
+        for (auto &r : pmap[{e.name, EType::RIGHT}]) {
+            auto len = r.pos - l.pos;
+            if (!l.marked && !r.marked &&
+                len >= MIN_SV_LENGTH &&
+                len <= MAX_SV_LENGTH) {
+                int left = l.to_int();
+                int right = r.to_int();
+
+                fprintf(stderr,
+                    "INV %s %d %d\n",
+                    e.name.data(), left, right
+                );
+            }
+        }
+    };
+
+    dump_extra_del_and_dup();
+    dump_extra_inv();
 
     return 0;
 }
